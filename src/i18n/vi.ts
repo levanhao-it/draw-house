@@ -1,0 +1,68 @@
+// All Vietnamese UI copy — no hardcoded strings in JSX components (G-3)
+export const vi = {
+  step1: {
+    title: 'Bước 1 · Chọn ảnh',
+    drop:  'Kéo ảnh vào đây, dán (Ctrl+V) hoặc bấm để chọn',
+    hint:  'Ảnh phối cảnh, mặt bằng tầng hoặc bản đồ · JPG/PNG ≤25MB',
+  },
+  step2: {
+    title:      'Bước 2 · Bấm vào vị trí trên ảnh',
+    unit:       'Căn hộ',
+    poi:        'Tiện ích',
+    route:      'Tuyến đường',
+    zone:       'Phân khu',
+    quickInput: 'Nhập mã căn rồi Enter…',
+    hint:       'Bấm nhiều lần để thêm nhiều điểm',
+  },
+  step3: {
+    title:     'Bước 3 · Thông tin & tải ảnh',
+    export1:   'Tải PNG (@2x)',
+    exportAll: 'Tải cả 3 tỉ lệ',
+    exportZip: 'Xuất từng căn (ZIP)',
+  },
+  fields: {
+    code:   'Mã căn',
+    area:   'Diện tích',
+    rooms:  'Phòng ngủ / WC',
+    orient: 'Hướng',
+    view:   'View',
+    price:  'Giá',
+    hook:   'Điểm nhấn',
+    status: 'Trạng thái',
+    name:   'Tên',
+    icon:   'Biểu tượng',
+    dist:   'Khoảng cách',
+    style:  'Kiểu đường',
+    fill:   'Màu nền',
+    opacity: 'Độ trong suốt',
+  },
+  status: {
+    available: '',
+    hold:      'ĐANG GIỬ CHỔ',
+    sold:      'ĐÃ BÁN',
+  },
+  warn: {
+    tooManyLines:  'Quá 5 dòng — đã tự ẩn bớt thông tin ít quan trọng.',
+    needHotline:   'Điền hotline để tải ảnh (chỉ cần 1 lần, 10 giây).',
+    checkPosition: 'Kiểm tra đúng vị trí căn trước khi gửi khách.',
+    lowContrast:   'Chữ khó đọc trên nền này — đã tự thêm lớp nền mờ.',
+    outsideFrame:  'N điểm nằm ngoài khung ở tỉ lệ này.',
+    imageTooLarge: 'Ảnh quá 25MB, vui lòng chọn ảnh nhỏ hơn.',
+  },
+  legend: {
+    title:        'CHÚ GIẢI',
+    relativeDist: '(khoảng cách tương đối)',
+  },
+  brand: {
+    title:       'Brand Kit',
+    logo:        'Logo (PNG trong suốt)',
+    logoCorner:  'Vị trí logo',
+    hotline:     'Hotline',
+    agentName:   'Tên sale',
+    accentColor: 'Màu nhấn',
+    save:        'Lưu',
+  },
+  /** Mandatory footer text — rendered on every export (G-8). */
+  disclaimer:
+    'Hình ảnh mang tính minh họa. Thông tin có thể thay đổi, vui lòng liên hệ để xác nhận.',
+} as const;
