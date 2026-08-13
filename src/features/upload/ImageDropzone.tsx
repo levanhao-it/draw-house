@@ -40,7 +40,7 @@ export default function ImageDropzone({ onLoad }: Props) {
       onDragOver={e => e.preventDefault()}
       onPaste={handlePaste}
     >
-      <h1 className="text-3xl font-bold text-yellow-400 mb-2">VeCan Studio</h1>
+      <h1 className="text-3xl font-bold text-yellow-400 mb-2">baonhichaoxin studio</h1>
       <p className="text-neutral-400 text-sm mb-8">{vi.step1.title}</p>
 
       <button
