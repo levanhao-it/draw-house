@@ -31,7 +31,7 @@ export const vi = {
     title:       'Xuất Video / GIF',
     duration:    'Thời lượng',
     exportGif:   'Xuất GIF',
-    exportVideo: 'Xuất Video (WebM)',
+    exportVideo: 'Xuất Video (MP4 / WebM)',
     exporting:   'Đang dựng…',
   },
   spotlight: {

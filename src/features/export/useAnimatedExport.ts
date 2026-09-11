@@ -32,6 +32,20 @@ const FADE_IN_SEC_BY_TYPE: Partial<Record<MarkerType, number>> = { ZONE: 1.3 };
 const ZOOM          = 1.06; // "zoom nhẹ Ken Burns 1.0→1.06" — slight, not dramatic
 const ENDING_FRAC   = 0.18; // last portion of the clip reserved for the QR/hotline outro card
 
+function getSupportedVideoFormat(): { mimeType: string; extension: 'mp4' | 'webm' } | null {
+  if (typeof window === 'undefined' || typeof window.MediaRecorder === 'undefined') return null;
+
+  // MP4/H.264 is the most widely supported format on phones. Chrome/Firefox usually
+  // do not expose it through MediaRecorder, so keep VP8 WebM as the browser fallback.
+  const formats = [
+    { mimeType: 'video/mp4;codecs="avc1.42E01E"', extension: 'mp4' as const },
+    { mimeType: 'video/mp4', extension: 'mp4' as const },
+    { mimeType: 'video/webm;codecs=vp8', extension: 'webm' as const },
+    { mimeType: 'video/webm', extension: 'webm' as const },
+  ];
+  return formats.find(format => MediaRecorder.isTypeSupported(format.mimeType)) ?? null;
+}
+
 function outputSize(w: number, h: number, maxLongEdge: number): { w: number; h: number } {
   const aspect = w / h;
   if (aspect >= 1) {
@@ -243,8 +257,8 @@ export function useAnimatedExport(state: AppState) {
       const outCtx = out.getContext('2d');
       if (!outCtx) return;
 
-      const mimeType = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
-        .find(type => window.MediaRecorder?.isTypeSupported(type)) ?? 'video/webm';
+      const videoFormat = getSupportedVideoFormat();
+      if (!videoFormat) return;
 
       // Manual capture (frameRate 0 + track.requestFrame()) when supported (Chrome/Edge/Safari,
       // not Firefox) so every encoded frame is a deliberately-just-rendered one, instead of
@@ -260,7 +274,7 @@ export function useAnimatedExport(state: AppState) {
       }
       const liveStream = useManual ? manualCapture : out.captureStream(VIDEO_FPS);
 
-      const recorder = new MediaRecorder(liveStream, { mimeType });
+      const recorder = new MediaRecorder(liveStream, { mimeType: videoFormat.mimeType });
       const chunks: Blob[] = [];
       recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
       const stopped = new Promise<void>(resolve => { recorder.onstop = () => resolve(); });
@@ -291,7 +305,7 @@ export function useAnimatedExport(state: AppState) {
       recorder.stop();
       await stopped;
 
-      downloadBlob(new Blob(chunks, { type: mimeType }), 'vecan_export.webm');
+      downloadBlob(new Blob(chunks, { type: videoFormat.mimeType }), `vecan_export.${videoFormat.extension}`);
     } finally {
       setExporting(false);
     }
