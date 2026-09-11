@@ -1,12 +1,14 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type { AppState, SceneAction } from '../../hooks/useScene';
-import type { UnitMarker, PoiMarker, RouteMarker, ZoneMarker, NormPoint } from '../../types/index';
+import type { UnitMarker, PoiMarker, RouteMarker, ZoneMarker, ArrowMarker, TextMarker, NormPoint } from '../../types/index';
 import { getPreset } from '../../design/presets';
 import { renderScene } from '../../render-core/index';
-import { getCardPlacements, CARD_W_1080, CARD_H_1080 } from '../../render-core/place';
+import { getCardPlacements } from '../../render-core/place';
 import { resolveDisplayMode } from '../../render-core/layers/legendLayer';
-import type { Rect } from '../../render-core/geom';
+import { toPx, type Rect } from '../../render-core/geom';
+import { getMarkerPoints, withMarkerPoint, type PointRef } from '../../types/markerPoints';
 import { markerId } from '../../lib/id';
+import { vi } from '../../i18n/vi';
 import QuickInputPopover from './QuickInputPopover';
 
 interface Props {
@@ -14,7 +16,7 @@ interface Props {
   dispatch: React.Dispatch<SceneAction>;
 }
 
-interface Popover { markerId: string; screenX: number; screenY: number }
+interface Popover { markerId: string; kind: 'UNIT' | 'TEXT'; screenX: number; screenY: number }
 
 /** Pixels-threshold below which two consecutive clicks are merged (double-click dedup). */
 const DBLCLICK_MS = 320;
@@ -37,20 +39,30 @@ export default function StageCanvas({ state, dispatch }: Props) {
     active: boolean;
     initialCardScale: number;
     initialCardW: number;
+    initialCardH: number;
     frameW: number;
   } | null>(null);
   const dragPositionRef = useRef<{ id: string; pos: NormPoint } | null>(null);
   const dragScaleRef    = useRef<{ id: string; scale: number } | null>(null);
+
+  // Drag state for any single point on the selected marker (POI/TEXT/UNIT point,
+  // ARROW from/to, or a ROUTE/ZONE path vertex) — one mechanism for every type.
+  const pointDragRef = useRef<{
+    markerId: string; ref: PointRef;
+    active: boolean; startX: number; startY: number;
+  } | null>(null);
+  const dragPointRef = useRef<{ id: string; ref: PointRef; pos: NormPoint } | null>(null);
+
   const [dragTick, setDragTick]     = useState(0);
   const suppressNextClick           = useRef(false);
   const [dragCursor, setDragCursor] = useState('cursor-crosshair');
 
-  // Pending path for ROUTE / ZONE tools (local UI state — not committed yet)
+  // Pending path for ROUTE / ZONE / ARROW tools (local UI state — not committed yet)
   const [pendingPath, setPendingPath]   = useState<NormPoint[]>([]);
   const pendingPathRef                  = useRef<NormPoint[]>([]);
   const clickTimerRef                   = useRef<number | null>(null);
 
-  const isPathTool = state.activeTool === 'ROUTE' || state.activeTool === 'ZONE';
+  const isPathTool = state.activeTool === 'ROUTE' || state.activeTool === 'ZONE' || state.activeTool === 'ARROW';
 
   // Cancel pending path when tool changes
   useEffect(() => {
@@ -105,28 +117,36 @@ export default function StageCanvas({ state, dispatch }: Props) {
 
     // Apply local drag preview without a store round-trip
     const renderMarkers = (() => {
-      if (!dragPositionRef.current && !dragScaleRef.current) return state.markers;
+      if (!dragPositionRef.current && !dragScaleRef.current && !dragPointRef.current) return state.markers;
       return state.markers.map(m => {
         if (dragPositionRef.current?.id === m.id)
           return { ...m, layout: { ...m.layout, auto: false, cardAnchor: dragPositionRef.current!.pos } };
         if (dragScaleRef.current?.id === m.id)
           return { ...m, layout: { ...m.layout, cardScale: dragScaleRef.current!.scale } };
+        if (dragPointRef.current?.id === m.id)
+          return withMarkerPoint(m, dragPointRef.current.ref, dragPointRef.current.pos);
         return m;
       });
     })();
 
     // Update card placement cache from committed state (not drag preview)
     const mode = state.displayMode === 'auto' ? resolveDisplayMode(state.markers) : state.displayMode;
-    cardPlacements.current = mode === 'callout' ? getCardPlacements(state.markers, displaySize) : new Map();
+    cardPlacements.current = mode === 'callout' ? getCardPlacements(state.markers, displaySize, ctx, preset) : new Map();
 
     const doRender = (img: HTMLImageElement) => {
       renderScene(ctx, img, renderMarkers, displaySize, preset, state.brand, state.disclaimer, state.displayMode, state.spotlightMode);
       drawPendingOverlay(ctx, pendingPath, displaySize, preset.accent);
-      // Draw resize/move handles for selected UNIT card
+      // Draw resize/move handles for the selected marker
       if (state.selectedMarkerId) {
-        const renderPlacements = getCardPlacements(renderMarkers, displaySize);
+        const renderPlacements = getCardPlacements(renderMarkers, displaySize, ctx, preset);
         const rect = renderPlacements.get(state.selectedMarkerId);
         if (rect) drawCardHandles(ctx, rect, preset.accent);
+
+        const selMarker = renderMarkers.find(m => m.id === state.selectedMarkerId);
+        if (selMarker) {
+          const points = getMarkerPoints(selMarker).map(p => toPx(p.pos, displaySize));
+          drawPointHandles(ctx, points, preset.accent);
+        }
       }
     };
 
@@ -171,6 +191,14 @@ export default function StageCanvas({ state, dispatch }: Props) {
         data: { name: 'Tuyến đường', style: 'solid' },
       };
       dispatch({ type: 'ADD_MARKER', marker: m });
+    } else if (state.activeTool === 'ARROW') {
+      const m: ArrowMarker = {
+        id, type: 'ARROW', order: state.markers.length + 1,
+        layout: { auto: true, cardAnchor: null, arrowCtrl: null },
+        from: cleaned[0]!, to: cleaned[1]!,
+        data: {},
+      };
+      dispatch({ type: 'ADD_MARKER', marker: m });
     } else {
       const m: ZoneMarker = {
         id, type: 'ZONE', order: state.markers.length + 1,
@@ -203,7 +231,20 @@ export default function StageCanvas({ state, dispatch }: Props) {
         data: { code: '' },
       };
       dispatch({ type: 'ADD_MARKER', marker });
-      setPopover({ markerId: id, screenX: e.clientX, screenY: e.clientY });
+      setPopover({ markerId: id, kind: 'UNIT', screenX: e.clientX, screenY: e.clientY });
+      return;
+    }
+
+    if (state.activeTool === 'TEXT') {
+      const id = markerId();
+      const marker: TextMarker = {
+        id, type: 'TEXT', order: state.markers.length + 1,
+        point: { x: nx, y: ny },
+        layout: { auto: true, cardAnchor: null, arrowCtrl: null },
+        data: { text: '' },
+      };
+      dispatch({ type: 'ADD_MARKER', marker });
+      setPopover({ markerId: id, kind: 'TEXT', screenX: e.clientX, screenY: e.clientY });
       return;
     }
 
@@ -220,7 +261,7 @@ export default function StageCanvas({ state, dispatch }: Props) {
       return;
     }
 
-    // ROUTE / ZONE: timer-based double-click detection
+    // ROUTE / ZONE: timer-based double-click detection; ARROW: exactly 2 points, auto-commit
     if (isPathTool) {
       if (clickTimerRef.current !== null) {
         // Second click within DBLCLICK_MS → treat as double-click → commit
@@ -232,6 +273,10 @@ export default function StageCanvas({ state, dispatch }: Props) {
         const newPath = [...pendingPathRef.current, { x: nx, y: ny }];
         pendingPathRef.current = newPath;
         setPendingPath(newPath);
+        if (state.activeTool === 'ARROW' && newPath.length >= 2) {
+          commitPath();
+          return;
+        }
         clickTimerRef.current = window.setTimeout(() => {
           clickTimerRef.current = null;
         }, DBLCLICK_MS);
@@ -244,11 +289,33 @@ export default function StageCanvas({ state, dispatch }: Props) {
   const RESIZE_ZONE = 18; // px from bottom-right corner that triggers resize
 
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!displaySize.w || isPathTool) return;
+    if (!displaySize.w) return;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
+
+    // Point handles on the selected marker — works for any marker type's point(s).
+    // Checked BEFORE the isPathTool bail-out so an existing ROUTE/ZONE/ARROW marker's
+    // own vertices stay draggable even while that same tool is still active (the most
+    // common case right after drawing one).
+    const selected = state.markers.find(m => m.id === state.selectedMarkerId);
+    if (selected) {
+      const HANDLE_R = 14;
+      for (const { ref, pos } of getMarkerPoints(selected)) {
+        const p = toPx(pos, displaySize);
+        if (Math.hypot(cx - p.x, cy - p.y) <= HANDLE_R) {
+          e.currentTarget.setPointerCapture(e.pointerId);
+          pointDragRef.current = { markerId: selected.id, ref, active: false, startX: cx, startY: cy };
+          suppressNextClick.current = true;
+          return;
+        }
+      }
+    }
+
+    // A path tool being drawn takes over plain clicks (add-point flow in handleClick)
+    // once we know the click wasn't on a drag handle above.
+    if (isPathTool) return;
 
     for (const [id, cardRect] of cardPlacements.current) {
       if (cx >= cardRect.x && cx < cardRect.x + cardRect.w &&
@@ -265,6 +332,7 @@ export default function StageCanvas({ state, dispatch }: Props) {
           startX: cx, startY: cy, active: false,
           initialCardScale,
           initialCardW: cardRect.w,
+          initialCardH: cardRect.h,
           frameW: displaySize.w,
         };
         suppressNextClick.current = true;
@@ -272,9 +340,29 @@ export default function StageCanvas({ state, dispatch }: Props) {
         return;
       }
     }
-  }, [displaySize, isPathTool, state.markers, dispatch]);
+  }, [displaySize, isPathTool, state.markers, state.selectedMarkerId, dispatch]);
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    const pointDrag = pointDragRef.current;
+    if (pointDrag) {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+
+      if (!pointDrag.active) {
+        if (Math.hypot(cx - pointDrag.startX, cy - pointDrag.startY) < 3) return;
+        pointDrag.active = true;
+        setDragCursor('cursor-grabbing');
+      }
+
+      const nx = Math.max(0, Math.min(1, cx / displaySize.w));
+      const ny = Math.max(0, Math.min(1, cy / displaySize.h));
+      dragPointRef.current = { id: pointDrag.markerId, ref: pointDrag.ref, pos: { x: nx, y: ny } };
+      setDragTick(t => t + 1);
+      return;
+    }
+
     const drag = dragRef.current;
     if (!drag) return;
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -294,10 +382,9 @@ export default function StageCanvas({ state, dispatch }: Props) {
       const newScale  = Math.max(0.5, Math.min(1.8, (newCardW / drag.initialCardW) * drag.initialCardScale));
       dragScaleRef.current = { id: drag.markerId, scale: newScale };
     } else {
-      const scale  = displaySize.w / 1080;
-      const cs     = drag.initialCardScale;
-      const cardW  = CARD_W_1080 * scale * cs;
-      const cardH  = CARD_H_1080 * scale * cs;
+      // Reuse the placement's own (possibly content-widened) size, not a fixed constant.
+      const cardW  = drag.initialCardW;
+      const cardH  = drag.initialCardH;
       const rawX   = Math.round((cx - drag.offsetX) / SNAP_PX) * SNAP_PX;
       const rawY   = Math.round((cy - drag.offsetY) / SNAP_PX) * SNAP_PX;
       const nx     = Math.max(0, Math.min((displaySize.w - cardW) / displaySize.w, rawX / displaySize.w));
@@ -308,6 +395,13 @@ export default function StageCanvas({ state, dispatch }: Props) {
   }, [displaySize]);
 
   const onPointerUp = useCallback(() => {
+    const pointDrag = pointDragRef.current;
+    if (pointDrag?.active && dragPointRef.current) {
+      dispatch({ type: 'UPDATE_MARKER_POINT', id: pointDrag.markerId, ref: pointDrag.ref, point: dragPointRef.current.pos });
+    }
+    pointDragRef.current = null;
+    dragPointRef.current = null;
+
     const drag = dragRef.current;
     if (drag?.active) {
       if (drag.mode === 'move' && dragPositionRef.current) {
@@ -365,8 +459,13 @@ export default function StageCanvas({ state, dispatch }: Props) {
         <QuickInputPopover
           x={popover.screenX}
           y={popover.screenY}
-          onSubmit={code => {
-            dispatch({ type: 'UPDATE_UNIT_DATA', id: popover.markerId, data: { code } });
+          placeholder={popover.kind === 'TEXT' ? vi.step2.quickInputText : vi.step2.quickInput}
+          onSubmit={value => {
+            if (popover.kind === 'TEXT') {
+              dispatch({ type: 'UPDATE_TEXT_DATA', id: popover.markerId, data: { text: value } });
+            } else {
+              dispatch({ type: 'UPDATE_UNIT_DATA', id: popover.markerId, data: { code: value } });
+            }
             dispatch({ type: 'SELECT_MARKER', id: popover.markerId });
             setPopover(null);
           }}
@@ -404,6 +503,46 @@ function drawCardHandles(
   ctx.roundRect(rect.x + rect.w - HS, rect.y + rect.h - HS, HS, HS, 2);
   ctx.fill();
   ctx.stroke();
+
+  ctx.restore();
+}
+
+/** Draw draggable handles at every editable point on the selected marker (works for a
+ *  single point — UNIT/POI/TEXT — or several — ARROW's 2, a ROUTE/ZONE's path vertices). */
+function drawPointHandles(
+  ctx: CanvasRenderingContext2D,
+  points: Array<{ x: number; y: number }>,
+  accent: string,
+): void {
+  if (points.length === 0) return;
+  const R = 7;
+  ctx.save();
+
+  if (points.length > 1) {
+    ctx.strokeStyle = accent;
+    ctx.lineWidth   = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(points[0]!.x, points[0]!.y);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i]!.x, points[i]!.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Hollow ring, not a filled dot — a single-point marker (POI/TEXT/UNIT) renders its
+  // label centred exactly on that point, so a solid fill would blot out its own text.
+  for (const p of points) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, R, 0, Math.PI * 2);
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth   = 3.5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, R, 0, Math.PI * 2);
+    ctx.strokeStyle = accent;
+    ctx.lineWidth   = 1.5;
+    ctx.stroke();
+  }
 
   ctx.restore();
 }

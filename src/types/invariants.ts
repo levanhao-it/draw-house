@@ -4,6 +4,7 @@ import {
   type UnitMarker,
   type RouteMarker,
   type ZoneMarker,
+  type ArrowMarker,
   LEGEND_THRESHOLD,
 } from './index';
 
@@ -17,10 +18,17 @@ class InvariantError extends Error {
 // I1: every x,y ∈ [0,1]
 function checkI1(markers: Marker[]): void {
   for (const m of markers) {
-    if (m.type === 'UNIT' || m.type === 'POI') {
+    if (m.type === 'UNIT' || m.type === 'POI' || m.type === 'TEXT') {
       const { x, y } = (m as UnitMarker).point;
       if (x < 0 || x > 1 || y < 0 || y > 1) {
         throw new InvariantError('I1', `Marker ${m.id} point out of [0,1]: (${x}, ${y})`);
+      }
+    } else if (m.type === 'ARROW') {
+      const a = m as ArrowMarker;
+      for (const p of [a.from, a.to]) {
+        if (p.x < 0 || p.x > 1 || p.y < 0 || p.y > 1) {
+          throw new InvariantError('I1', `Marker ${m.id} point out of [0,1]: (${p.x}, ${p.y})`);
+        }
       }
     } else {
       for (const p of (m as RouteMarker | ZoneMarker).path) {

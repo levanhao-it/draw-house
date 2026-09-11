@@ -57,6 +57,15 @@ export function drawEffect(
     const { x, y } = toPx(m.point, frame);
     const r = m.radius * shortEdge;
     ctx.save();
+    // R1: white halo first so the ring stays legible on any photo background
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.globalAlpha = 0.9;
+    ctx.lineWidth   = 5 * s;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
     ctx.strokeStyle = accent;
     ctx.lineWidth = 3 * s;
     ctx.shadowColor = accent;

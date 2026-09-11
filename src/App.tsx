@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useScene } from './hooks/useScene';
-import type { UnitMarker, PoiMarker, RouteMarker, ZoneMarker, SpotlightMode, SceneImage } from './types/index';
+import type { UnitMarker, PoiMarker, RouteMarker, ZoneMarker, ArrowMarker, TextMarker, SpotlightMode, SceneImage, MarkerType } from './types/index';
 import ImageDropzone from './features/upload/ImageDropzone';
 import StageCanvas from './features/markers/StageCanvas';
 import MarkerToolbar from './features/markers/MarkerToolbar';
@@ -9,19 +9,58 @@ import UnitForm from './features/forms/UnitForm';
 import PoiForm from './features/forms/PoiForm';
 import RouteForm from './features/forms/RouteForm';
 import ZoneForm from './features/forms/ZoneForm';
+import ArrowForm from './features/forms/ArrowForm';
+import TextForm from './features/forms/TextForm';
 import ExportPanel from './features/export/ExportPanel';
 import PresetPicker from './features/presets/PresetPicker';
 import BrandKitModal from './features/brand/BrandKitModal';
 import { useAutosave } from './features/persistence/useAutosave';
 import { loadSession } from './lib/storage';
 
+const TOOL_SHORTCUTS: Record<string, MarkerType> = {
+  '1': 'UNIT', '2': 'POI', '3': 'ROUTE', '4': 'ZONE', '5': 'ARROW', '6': 'TEXT',
+};
+
 function App() {
-  const [state, dispatch] = useScene();
+  const [state, dispatch, history] = useScene();
   const [showBrand, setShowBrand] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const didRestore = useRef(false);
 
   useAutosave(state);
+
+  // Global shortcuts: Ctrl/Cmd+Z undo, +Shift/+Y redo, Delete removes selection, 1-6 switch tool.
+  // Skipped entirely while typing in a field so native text-editing/undo isn't hijacked.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const typing = !!target && (
+        target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+      );
+      if (typing) return;
+
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        dispatch({ type: e.shiftKey ? 'REDO' : 'UNDO' });
+        return;
+      }
+      if (mod && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        dispatch({ type: 'REDO' });
+        return;
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && state.selectedMarkerId) {
+        e.preventDefault();
+        dispatch({ type: 'DELETE_MARKER', id: state.selectedMarkerId });
+        return;
+      }
+      const tool = TOOL_SHORTCUTS[e.key];
+      if (tool && state.image) dispatch({ type: 'SET_TOOL', tool });
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [dispatch, state.selectedMarkerId, state.image]);
 
   // Restore last session on first mount (T-404)
   useEffect(() => {
@@ -74,6 +113,10 @@ function App() {
       <MarkerToolbar
         activeTool={state.activeTool}
         onToolChange={tool => dispatch({ type: 'SET_TOOL', tool })}
+        canUndo={history.canUndo}
+        canRedo={history.canRedo}
+        onUndo={() => dispatch({ type: 'UNDO' })}
+        onRedo={() => dispatch({ type: 'REDO' })}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -153,6 +196,12 @@ function App() {
             )}
             {selected?.type === 'ZONE' && (
               <ZoneForm marker={selected as ZoneMarker} dispatch={dispatch} />
+            )}
+            {selected?.type === 'ARROW' && (
+              <ArrowForm marker={selected as ArrowMarker} dispatch={dispatch} />
+            )}
+            {selected?.type === 'TEXT' && (
+              <TextForm marker={selected as TextMarker} dispatch={dispatch} />
             )}
             {!selected && (
               <div className="p-4 text-xs text-neutral-500">

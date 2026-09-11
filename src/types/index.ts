@@ -4,13 +4,13 @@
 export interface NormPoint { x: number; y: number }
 
 export type Ratio = '4:5' | '9:16' | '16:9' | '1:1';
-export type PresetId = 'neon_spotlight' | 'minimal_white' | 'luxe_gold_black' | 'map_clean';
+export type PresetId = 'neon_spotlight' | 'minimal_white' | 'luxe_gold_black' | 'map_clean' | 'black_white';
 export type ImageKind = 'perspective' | 'floorplan' | 'map';
 export type DisplayMode = 'auto' | 'callout' | 'legend';
 export type SpotlightMode = 'normal' | 'spotlight';
 export type UnitStatus = 'available' | 'hold' | 'sold';
 
-export type MarkerType = 'UNIT' | 'POI' | 'ROUTE' | 'ZONE';
+export type MarkerType = 'UNIT' | 'POI' | 'ROUTE' | 'ZONE' | 'ARROW' | 'TEXT';
 
 export interface LayoutOverride {
   auto: boolean;
@@ -38,6 +38,8 @@ export interface UnitMarker extends MarkerBase {
     orient?: string;
     view?: string;
     price?: string;
+    loan?: string;      // Giá vay (bank loan valuation), e.g. "65 tr/m2"
+    capital?: string;   // Vốn (upfront capital needed), e.g. "900 triệu"
     hook?: string;
   };
 }
@@ -65,7 +67,20 @@ export interface ZoneMarker extends MarkerBase {
   data: { name: string; fill?: string; opacity?: number };
 }
 
-export type Marker = UnitMarker | PoiMarker | RouteMarker | ZoneMarker;
+export interface ArrowMarker extends MarkerBase {
+  type: 'ARROW';
+  from: NormPoint;
+  to: NormPoint;
+  data: { label?: string; color?: string };
+}
+
+export interface TextMarker extends MarkerBase {
+  type: 'TEXT';
+  point: NormPoint;
+  data: { text: string };
+}
+
+export type Marker = UnitMarker | PoiMarker | RouteMarker | ZoneMarker | ArrowMarker | TextMarker;
 
 export interface SceneImage {
   id: string;
@@ -139,4 +154,4 @@ export const DEFAULT_DISCLAIMER =
   'Hình ảnh mang tính minh họa. Thông tin có thể thay đổi, vui lòng liên hệ để xác nhận.';
 
 /** Truncation priority: drop from the END first when card exceeds MAX_CARD_LINES. */
-export const FIELD_PRIORITY = ['code', 'price', 'rooms', 'area', 'view', 'orient', 'hook'] as const;
+export const FIELD_PRIORITY = ['code', 'price', 'rooms', 'area', 'view', 'orient', 'loan', 'capital', 'hook'] as const;

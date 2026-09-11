@@ -16,6 +16,12 @@ export const TYPO = {
 
 export const FONT_STACK = "'Be Vietnam Pro', 'Inter', system-ui, sans-serif";
 
+// UNIT card dimensions in the 1080-wide coordinate space. Width is a range, not a fixed value —
+// unitCard.ts grows it (up to the max) to fit content on one line before ever wrapping/shrinking.
+export const CARD_W_1080     = 320;
+export const CARD_W_1080_MAX = 460;
+export const CARD_H_1080     = 268;
+
 export const ELEVATION = {
   card:  { shadowColor: 'rgba(0,0,0,0.5)',  shadowBlur: 30, shadowOffsetY: 8 },
   arrow: { shadowColor: 'rgba(0,0,0,0.55)', shadowBlur: 14, shadowOffsetY: 4 },

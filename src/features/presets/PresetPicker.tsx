@@ -1,11 +1,29 @@
 import type { CSSProperties, Dispatch } from 'react';
 import type { PresetId } from '../../types/index';
 import { PRESETS, type Preset } from '../../design/presets';
+import { contrastRatio, type RGB } from '../../design/contrast';
 import type { SceneAction } from '../../hooks/useScene';
 
 interface Props {
   current: PresetId;
   dispatch: Dispatch<SceneAction>;
+}
+
+// The chip's own background when active (bg-neutral-800) — some preset accents (e.g. a near-black
+// "Black & White" accent) don't read against it, so fall back to a light neutral in that case.
+const CHIP_BG: RGB = [38, 38, 38];
+
+function hexToRgb(hex: string): RGB | null {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return null;
+  const h = m[1]!;
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
+function activeLabelColor(accent: string): string {
+  const rgb = hexToRgb(accent);
+  if (!rgb || contrastRatio(rgb, CHIP_BG) < 3) return '#E5E7EB';
+  return accent;
 }
 
 function Thumbnail({ preset }: { preset: Preset }) {
@@ -62,7 +80,7 @@ export default function PresetPicker({ current, dispatch }: Props) {
               <Thumbnail preset={preset} />
               <span
                 className="text-[9px] font-medium text-center w-full leading-tight"
-                style={{ color: active ? preset.accent : '#6b7280' }}
+                style={{ color: active ? activeLabelColor(preset.accent) : '#6b7280' }}
               >
                 {preset.label}
               </span>

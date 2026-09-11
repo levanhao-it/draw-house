@@ -1,5 +1,9 @@
 // All Vietnamese UI copy — no hardcoded strings in JSX components (G-3)
 export const vi = {
+  toolbar: {
+    undo: 'Hoàn tác',
+    redo: 'Làm lại',
+  },
   step1: {
     title: 'Bước 1 · Chọn ảnh',
     drop:  'Kéo ảnh vào đây, dán (Ctrl+V) hoặc bấm để chọn',
@@ -11,12 +15,15 @@ export const vi = {
     poi:        'Tiện ích',
     route:      'Tuyến đường',
     zone:       'Phân khu',
-    quickInput: 'Nhập mã căn rồi Enter…',
+    arrow:      'Mũi tên',
+    text:       'Văn bản',
+    quickInput:     'Nhập mã căn rồi Enter…',
+    quickInputText: 'Nhập văn bản rồi Enter…',
     hint:       'Bấm nhiều lần để thêm nhiều điểm',
   },
   step3: {
     title:     'Bước 3 · Thông tin & tải ảnh',
-    export1:   'Tải PNG (@2x)',
+    export1:   'Tải PNG (chất lượng gốc)',
     exportAll: 'Tải cả 3 tỉ lệ',
     exportZip: 'Xuất từng căn (ZIP)',
   },
@@ -27,6 +34,8 @@ export const vi = {
     orient: 'Hướng',
     view:   'View',
     price:  'Giá',
+    loan:    'Giá vay',
+    capital: 'Vốn',
     hook:   'Điểm nhấn',
     status: 'Trạng thái',
     name:   'Tên',
@@ -38,7 +47,7 @@ export const vi = {
   },
   status: {
     available: '',
-    hold:      'ĐANG GIỬ CHỔ',
+    hold:      'ĐANG GIỮ CHỖ',
     sold:      'ĐÃ BÁN',
   },
   warn: {

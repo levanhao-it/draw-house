@@ -1,13 +1,24 @@
 // Card placement heuristic — 8 candidate quadrants, pick first non-overlapping fit
 import { toPx, type Size, type Rect } from './geom';
+import { measureCardWidth } from './shapes/unitCard';
+import { CARD_W_1080, CARD_H_1080 } from '../design/tokens';
 import type { NormPoint, Marker, UnitMarker } from '../types/index';
+import type { Preset } from '../design/presets';
 
-/** Card dimensions in the 1080-wide coordinate space. */
-export const CARD_W_1080 = 320;
-export const CARD_H_1080 = 190;
+export { CARD_W_1080, CARD_H_1080 };
 
 export function cardSize(scale: number): { w: number; h: number } {
   return { w: CARD_W_1080 * scale, h: CARD_H_1080 * scale };
+}
+
+/** Card size for a specific UNIT marker — width grows (up to a cap) to fit its content on one line. */
+export function unitCardSize(
+  marker: UnitMarker,
+  preset: Preset,
+  ctx: CanvasRenderingContext2D,
+  scale: number,
+): { w: number; h: number } {
+  return { w: measureCardWidth(marker, preset, ctx, scale), h: CARD_H_1080 * scale };
 }
 
 export interface CardPlacement {
@@ -81,7 +92,12 @@ export function placeCard(
  * Compute all UNIT card rects for the current frame, respecting manual cardAnchor overrides.
  * Used for drag hit-testing in StageCanvas (pure, no rendering).
  */
-export function getCardPlacements(markers: Marker[], frame: Size): Map<string, Rect> {
+export function getCardPlacements(
+  markers: Marker[],
+  frame: Size,
+  ctx: CanvasRenderingContext2D,
+  preset: Preset,
+): Map<string, Rect> {
   const result = new Map<string, Rect>();
   const placed: Rect[] = [];
 
@@ -89,7 +105,7 @@ export function getCardPlacements(markers: Marker[], frame: Size): Map<string, R
     if (m.type !== 'UNIT') continue;
     const unit = m as UnitMarker;
     const effectiveScale = (frame.w / 1080) * (unit.layout.cardScale ?? 1);
-    const { w: cardW, h: cardH } = cardSize(effectiveScale);
+    const { w: cardW, h: cardH } = unitCardSize(unit, preset, ctx, effectiveScale);
     let x: number, y: number;
     if (!unit.layout.auto && unit.layout.cardAnchor) {
       const p = toPx(unit.layout.cardAnchor, frame);

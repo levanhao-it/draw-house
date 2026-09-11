@@ -1,4 +1,5 @@
 import { POI_ICONS } from '../../design/icons';
+import { getPoiIconImage } from '../../design/poiIconImages';
 import { TYPO, FONT_STACK, ELEVATION, SPACE } from '../../design/tokens';
 import type { PoiMarker } from '../../types/index';
 import type { Preset } from '../../design/presets';
@@ -42,17 +43,22 @@ export function drawPoiPill(
   ctx.fill();
   ctx.shadowColor = 'transparent';
 
-  // Icon via Path2D
-  const iconY = pillY + (pillH - iconSz) / 2;
-  ctx.save();
-  ctx.translate(pillX + pad, iconY);
-  ctx.scale(iconSz / 24, iconSz / 24);
-  ctx.strokeStyle = preset.accent;
-  ctx.lineWidth   = 2 * (24 / iconSz);
-  ctx.lineCap     = 'round';
-  ctx.lineJoin    = 'round';
-  ctx.stroke(new Path2D(POI_ICONS[marker.data.icon]));
-  ctx.restore();
+  // Icon: custom artwork if supplied for this POI type, else the vector path
+  const iconY  = pillY + (pillH - iconSz) / 2;
+  const iconImg = getPoiIconImage(marker.data.icon);
+  if (iconImg) {
+    ctx.drawImage(iconImg, pillX + pad, iconY, iconSz, iconSz);
+  } else {
+    ctx.save();
+    ctx.translate(pillX + pad, iconY);
+    ctx.scale(iconSz / 24, iconSz / 24);
+    ctx.strokeStyle = preset.accent;
+    ctx.lineWidth   = 2 * (24 / iconSz);
+    ctx.lineCap     = 'round';
+    ctx.lineJoin    = 'round';
+    ctx.stroke(new Path2D(POI_ICONS[marker.data.icon]));
+    ctx.restore();
+  }
 
   // Text
   ctx.fillStyle    = preset.textPrimary;

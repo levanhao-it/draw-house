@@ -6,11 +6,12 @@ interface Props {
   /** Screen coordinates of the click (clientX/clientY). */
   x: number;
   y: number;
+  placeholder?: string;
   onSubmit: (code: string) => void;
   onCancel: () => void;
 }
 
-export default function QuickInputPopover({ x, y, onSubmit, onCancel }: Props) {
+export default function QuickInputPopover({ x, y, placeholder, onSubmit, onCancel }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -36,7 +37,7 @@ export default function QuickInputPopover({ x, y, onSubmit, onCancel }: Props) {
         ref={inputRef}
         type="text"
         maxLength={MAX_FIELD_LEN}
-        placeholder={vi.step2.quickInput}
+        placeholder={placeholder ?? vi.step2.quickInput}
         onKeyDown={handleKeyDown}
         onBlur={onCancel}
         className="

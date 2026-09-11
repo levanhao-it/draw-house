@@ -1,5 +1,50 @@
 import type { PoiIcon } from '../types/index';
 
+export type FieldIconKey = 'area' | 'rooms' | 'orient' | 'view' | 'price' | 'hook' | 'loan' | 'capital';
+
+export interface FieldIconDef {
+  stroke?: string;
+  fill?: string;
+}
+
+/**
+ * Unit-card spec-field icons (viewBox 24×24, currentColor). Each combines a
+ * stroked outline with a small solid accent so they stay readable at ~16px.
+ */
+export const FIELD_ICONS: Record<FieldIconKey, FieldIconDef> = {
+  area: {
+    stroke: 'M8 3H4v4M16 3h4v4M8 21H4v-4M16 21h4v-4',
+  },
+  rooms: {
+    stroke:
+      'M3 19v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6M3 19h18M3 19v2M21 19v2M6 11V8a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v3',
+  },
+  orient: {
+    stroke: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z',
+    fill:   'M12 5L15.6 13.2L12 11L8.4 13.2Z',
+  },
+  view: {
+    stroke: 'M2 19L7 10L10 13L16 6L22 19Z',
+    fill:   'M18 7.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z',
+  },
+  price: {
+    stroke: 'M3 7h18v10H3z',
+    fill:   'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  },
+  hook: {
+    fill: 'M12 3L14.1 9.1L20.6 9.2L15.4 13.1L17.3 19.3L12 15.6L6.7 19.3L8.6 13.1L3.4 9.2L9.9 9.1Z',
+  },
+  loan: {
+    // Bank/institution silhouette (roof + columns + base) for "Giá vay" (loan valuation).
+    stroke: 'M3 10L12 4L21 10M6.5 10V18M12 10V18M17.5 10V18M2 20H22',
+  },
+  capital: {
+    // Wallet silhouette for "Vốn" (upfront cash on hand).
+    stroke: 'M3 7h15a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zM3 7V5a2 2 0 0 1 2-2h11',
+    fill:   'M16.25 11.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z',
+  },
+};
+
 /** SVG path `d` strings for 16 POI icons (viewBox 24×24, stroke-based, currentColor). */
 export const POI_ICONS: Record<PoiIcon, string> = {
   metro:

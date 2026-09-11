@@ -1,11 +1,13 @@
 import type { AppState, SceneAction } from '../../hooks/useScene';
-import type { Marker, UnitMarker, PoiMarker, RouteMarker, ZoneMarker } from '../../types/index';
+import type { Marker, UnitMarker, PoiMarker, RouteMarker, ZoneMarker, ArrowMarker, TextMarker } from '../../types/index';
 
 const TYPE_EMOJI: Record<string, string> = {
   UNIT:  '🏠',
   POI:   '📍',
   ROUTE: '🛣',
   ZONE:  '⬛',
+  ARROW: '➡️',
+  TEXT:  '📝',
 };
 
 function markerLabel(m: Marker): string {
@@ -14,6 +16,8 @@ function markerLabel(m: Marker): string {
     case 'POI':   return (m as PoiMarker).data.name || '(chưa nhập tên)';
     case 'ROUTE': return (m as RouteMarker).data.name || 'Tuyến đường';
     case 'ZONE':  return (m as ZoneMarker).data.name || 'Phân khu';
+    case 'ARROW': return (m as ArrowMarker).data.label || 'Mũi tên';
+    case 'TEXT':  return (m as TextMarker).data.text || '(chưa nhập văn bản)';
   }
 }
 

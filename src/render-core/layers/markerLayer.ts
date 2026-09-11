@@ -1,13 +1,15 @@
-import { placeCard, cardSize, type CardPlacement } from '../place';
+import { placeCard, unitCardSize, type CardPlacement } from '../place';
 import { drawUnitCard } from '../shapes/unitCard';
 import { drawCurvedArrow } from '../shapes/curvedArrow';
 import { drawNumberBadge } from '../shapes/numberBadge';
 import { drawPoiPill } from '../shapes/poiPill';
 import { drawRouteLine } from '../shapes/routeLine';
 import { drawZonePolygon } from '../shapes/zonePolygon';
+import { drawTextTag } from '../shapes/textTag';
 import { toPx, type Size, type Rect } from '../geom';
 import { resolveDisplayMode, drawLegend } from './legendLayer';
-import type { Marker, UnitMarker, PoiMarker, RouteMarker, ZoneMarker, DisplayMode } from '../../types/index';
+import { TYPO, FONT_STACK, SPACE, ELEVATION } from '../../design/tokens';
+import type { Marker, UnitMarker, PoiMarker, RouteMarker, ZoneMarker, ArrowMarker, TextMarker, DisplayMode } from '../../types/index';
 import type { Preset } from '../../design/presets';
 
 const BADGE_R_1080 = 22;
@@ -26,18 +28,23 @@ export function drawMarkers(
   const mode   = displayMode === 'auto' ? resolveDisplayMode(markers) : displayMode;
   const truncatedIds: string[] = [];
 
-  // Always render geometric features (routes, zones)
+  // Always render geometric features (routes, zones, standalone arrows)
   for (const m of markers) {
     if (m.type === 'ROUTE') drawRouteLine(ctx, m as RouteMarker, frame, preset, scale, mode === 'callout');
     if (m.type === 'ZONE')  drawZonePolygon(ctx, m as ZoneMarker, frame, preset, scale, mode === 'callout');
+    if (m.type === 'ARROW') drawArrowAnnotation(ctx, m as ArrowMarker, frame, preset, scale);
   }
 
   if (mode === 'callout') {
-    // POI pills
+    // POI pills + freestanding text tags
     for (const m of markers) {
       if (m.type === 'POI') {
         const px = toPx((m as PoiMarker).point, frame);
         drawPoiPill(ctx, px.x, px.y, m as PoiMarker, preset, scale);
+      }
+      if (m.type === 'TEXT') {
+        const px = toPx((m as TextMarker).point, frame);
+        drawTextTag(ctx, px.x, px.y, m as TextMarker, preset, scale);
       }
     }
 
@@ -50,7 +57,7 @@ export function drawMarkers(
       const shortEdge     = Math.min(frame.w, frame.h);
       const r             = m.radius * shortEdge;
       const effectiveScale = scale * (m.layout.cardScale ?? 1);
-      const { w: cardW, h: cardH } = cardSize(effectiveScale);
+      const { w: cardW, h: cardH } = unitCardSize(m, preset, ctx, effectiveScale);
 
       const placement: CardPlacement = (() => {
         if (!m.layout.auto && m.layout.cardAnchor) {
@@ -100,9 +107,15 @@ export function drawMarkers(
 }
 
 function badgeCenter(m: Marker, frame: Size): { bx: number; by: number } {
-  if (m.type === 'UNIT' || m.type === 'POI') {
-    const p = toPx((m as UnitMarker | PoiMarker).point, frame);
+  if (m.type === 'UNIT' || m.type === 'POI' || m.type === 'TEXT') {
+    const p = toPx((m as UnitMarker | PoiMarker | TextMarker).point, frame);
     return { bx: p.x, by: p.y };
+  }
+  if (m.type === 'ARROW') {
+    const a = m as ArrowMarker;
+    const from = toPx(a.from, frame);
+    const to   = toPx(a.to, frame);
+    return { bx: (from.x + to.x) / 2, by: (from.y + to.y) / 2 };
   }
   if (m.type === 'ROUTE') {
     const pts = (m as RouteMarker).path.map(p => toPx(p, frame));
@@ -115,4 +128,62 @@ function badgeCenter(m: Marker, frame: Size): { bx: number; by: number } {
     bx: pts.reduce((s, p) => s + p.x, 0) / pts.length,
     by: pts.reduce((s, p) => s + p.y, 0) / pts.length,
   };
+}
+
+/** Freestanding annotation arrow (not tied to a UNIT card), with an optional floating label. */
+function drawArrowAnnotation(
+  ctx: CanvasRenderingContext2D,
+  m: ArrowMarker,
+  frame: Size,
+  preset: Preset,
+  scale: number,
+): void {
+  const from = toPx(m.from, frame);
+  const to   = toPx(m.to, frame);
+  const dx = to.x - from.x, dy = to.y - from.y;
+  const dist = Math.hypot(dx, dy) || 1;
+  const mid  = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+  const h    = preset.arrowCurve * dist;
+  const nx = -dy / dist, ny = dx / dist;
+  const ctrl = { x: mid.x + nx * h, y: mid.y + ny * h };
+
+  drawCurvedArrow(ctx, {
+    from, ctrl, to, scale,
+    preset: m.data.color ? { ...preset, accent: m.data.color } : preset,
+  });
+
+  if (!m.data.label) return;
+
+  const fontSize = TYPO.pill.size * scale;
+  ctx.font = `${TYPO.pill.weight} ${fontSize}px ${FONT_STACK}`;
+  const padX = SPACE.xs * scale * 1.4;
+  const padY = SPACE.xs * scale * 0.9;
+  const tw = ctx.measureText(m.data.label).width;
+  const lW = tw + padX * 2;
+  const lH = fontSize + padY * 2;
+  const lift = lH / 2 + 10 * scale;
+  const lx = ctrl.x + nx * lift;
+  const ly = ctrl.y + ny * lift;
+
+  // Follow the arrow's own direction, clamped so the text is never upside-down
+  let angle = Math.atan2(dy, dx);
+  if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
+
+  ctx.save();
+  ctx.translate(lx, ly);
+  ctx.rotate(angle);
+  ctx.shadowColor   = ELEVATION.card.shadowColor;
+  ctx.shadowBlur    = ELEVATION.card.shadowBlur * scale * 0.5;
+  ctx.shadowOffsetY = ELEVATION.card.shadowOffsetY * scale * 0.5;
+  ctx.fillStyle     = preset.cardBg;
+  ctx.beginPath();
+  ctx.roundRect(-lW / 2, -lH / 2, lW, lH, lH / 2);
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+
+  ctx.fillStyle    = preset.textPrimary;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(m.data.label, 0, 0);
+  ctx.restore();
 }

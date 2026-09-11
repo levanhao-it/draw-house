@@ -10,12 +10,14 @@ interface Props {
 }
 
 const TEXT_FIELDS = [
-  { key: 'area',   label: vi.fields.area   },
-  { key: 'rooms',  label: vi.fields.rooms  },
-  { key: 'orient', label: vi.fields.orient },
-  { key: 'view',   label: vi.fields.view   },
-  { key: 'price',  label: vi.fields.price  },
-  { key: 'hook',   label: vi.fields.hook   },
+  { key: 'area',    label: vi.fields.area,    placeholder: undefined as string | undefined },
+  { key: 'rooms',   label: vi.fields.rooms,   placeholder: undefined as string | undefined },
+  { key: 'orient',  label: vi.fields.orient,  placeholder: undefined as string | undefined },
+  { key: 'view',    label: vi.fields.view,    placeholder: undefined as string | undefined },
+  { key: 'price',   label: vi.fields.price,   placeholder: undefined as string | undefined },
+  { key: 'loan',    label: vi.fields.loan,    placeholder: '65 tr/m2'  as string | undefined },
+  { key: 'capital', label: vi.fields.capital, placeholder: '900 triệu' as string | undefined },
+  { key: 'hook',    label: vi.fields.hook,    placeholder: undefined as string | undefined },
 ] as const;
 
 type OptKey = typeof TEXT_FIELDS[number]['key'];
@@ -48,13 +50,14 @@ export default function UnitForm({ marker, dispatch, truncated }: Props) {
       </div>
 
       {/* Optional text fields */}
-      {TEXT_FIELDS.map(({ key, label }) => (
+      {TEXT_FIELDS.map(({ key, label, placeholder }) => (
         <div key={key} className="flex flex-col gap-1">
           <label className="text-xs text-neutral-400">{label}</label>
           <input
             type="text"
             value={marker.data[key as OptKey] ?? ''}
             maxLength={MAX_FIELD_LEN}
+            placeholder={placeholder}
             onChange={e => update({ [key]: e.target.value || undefined } as Partial<UnitMarker['data']>)}
             className="bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-yellow-400"
           />

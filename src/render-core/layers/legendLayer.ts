@@ -1,9 +1,10 @@
 import { TYPO, FONT_STACK, SPACE } from '../../design/tokens';
 import { LEGEND_THRESHOLD } from '../../types/index';
-import type { Marker, UnitMarker, PoiMarker, RouteMarker, ZoneMarker } from '../../types/index';
+import type { Marker, UnitMarker, PoiMarker, RouteMarker, ZoneMarker, ArrowMarker, TextMarker } from '../../types/index';
 import type { Size } from '../geom';
 import type { Preset } from '../../design/presets';
 import { drawNumberBadge } from '../shapes/numberBadge';
+import { formatPriceDisplay } from '../text/formatPrice';
 import { BRAND_BAND_HEIGHT_1080 } from './brandLayer';
 import { vi } from '../../i18n/vi';
 
@@ -112,7 +113,7 @@ function markerLegendText(m: Marker): string {
       const u = m as UnitMarker;
       const parts = [u.data.code];
       if (u.data.area)  parts.push(u.data.area);
-      if (u.data.price) parts.push(u.data.price);
+      if (u.data.price) parts.push(formatPriceDisplay(u.data.price));
       return parts.join(' · ');
     }
     case 'POI': {
@@ -121,5 +122,7 @@ function markerLegendText(m: Marker): string {
     }
     case 'ROUTE': return (m as RouteMarker).data.name;
     case 'ZONE':  return (m as ZoneMarker).data.name;
+    case 'ARROW': return (m as ArrowMarker).data.label || 'Mũi tên';
+    case 'TEXT':  return (m as TextMarker).data.text;
   }
 }

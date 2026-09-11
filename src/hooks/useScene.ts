@@ -1,10 +1,11 @@
 import { useReducer, type Dispatch } from 'react';
 import type {
-  Marker, UnitMarker, PoiMarker, RouteMarker, ZoneMarker,
+  Marker, UnitMarker, PoiMarker, RouteMarker, ZoneMarker, ArrowMarker, TextMarker,
   SceneImage, Ratio, PresetId, BrandKit, MarkerType, DisplayMode, SpotlightMode,
-  LayoutOverride,
+  LayoutOverride, NormPoint,
 } from '../types/index';
 import { DEFAULT_DISCLAIMER } from '../types/index';
+import { withMarkerPoint, type PointRef } from '../types/markerPoints';
 
 export interface AppState {
   image: SceneImage | null;
@@ -20,7 +21,7 @@ export interface AppState {
   disclaimer: string;
 }
 
-export type SceneAction =
+export type ContentAction =
   | { type: 'SET_IMAGE'; image: SceneImage }
   | { type: 'ADD_MARKER'; marker: Marker }
   | { type: 'UPDATE_UNIT_DATA'; id: string; data: Partial<UnitMarker['data']> }
@@ -28,6 +29,9 @@ export type SceneAction =
   | { type: 'UPDATE_POI_DATA'; id: string; data: Partial<PoiMarker['data']> }
   | { type: 'UPDATE_ROUTE_DATA'; id: string; data: Partial<RouteMarker['data']> }
   | { type: 'UPDATE_ZONE_DATA'; id: string; data: Partial<ZoneMarker['data']> }
+  | { type: 'UPDATE_ARROW_DATA'; id: string; data: Partial<ArrowMarker['data']> }
+  | { type: 'UPDATE_MARKER_POINT'; id: string; ref: PointRef; point: NormPoint }
+  | { type: 'UPDATE_TEXT_DATA'; id: string; data: Partial<TextMarker['data']> }
   | { type: 'DELETE_MARKER'; id: string }
   | { type: 'SELECT_MARKER'; id: string | null }
   | { type: 'SET_TOOL'; tool: MarkerType }
@@ -41,13 +45,17 @@ export type SceneAction =
   | { type: 'RESTORE_SESSION'; payload: Partial<AppState> }
   | { type: 'CLEAR_IMAGE' };
 
+/** Public action type: content actions plus history control (kept separate so the
+ *  base reducer's switch stays exhaustive over content actions only). */
+export type SceneAction = ContentAction | { type: 'UNDO' } | { type: 'REDO' };
+
 const INITIAL_BRAND: BrandKit = {
   logoCorner: 'br',
   hotline: '',
   watermark: { enabled: false, opacity: 0.1 },
 };
 
-const INITIAL_STATE: AppState = {
+export const INITIAL_STATE: AppState = {
   image: null,
   markers: [],
   selectedMarkerId: null,
@@ -65,7 +73,7 @@ function reindexOrder(markers: Marker[]): Marker[] {
   return markers.map((m, i) => ({ ...m, order: i + 1 }));
 }
 
-function reducer(state: AppState, action: SceneAction): AppState {
+function reducer(state: AppState, action: ContentAction): AppState {
   switch (action.type) {
     case 'SET_IMAGE':
       return { ...INITIAL_STATE, image: action.image, step: 2, brand: state.brand };
@@ -112,6 +120,31 @@ function reducer(state: AppState, action: SceneAction): AppState {
     case 'UPDATE_ZONE_DATA': {
       const markers = state.markers.map((m): Marker =>
         m.id === action.id && m.type === 'ZONE'
+          ? { ...m, data: { ...m.data, ...action.data } }
+          : m,
+      );
+      return { ...state, markers };
+    }
+
+    case 'UPDATE_ARROW_DATA': {
+      const markers = state.markers.map((m): Marker =>
+        m.id === action.id && m.type === 'ARROW'
+          ? { ...m, data: { ...m.data, ...action.data } }
+          : m,
+      );
+      return { ...state, markers };
+    }
+
+    case 'UPDATE_MARKER_POINT': {
+      const markers = state.markers.map((m): Marker =>
+        m.id === action.id ? withMarkerPoint(m, action.ref, action.point) : m,
+      );
+      return { ...state, markers };
+    }
+
+    case 'UPDATE_TEXT_DATA': {
+      const markers = state.markers.map((m): Marker =>
+        m.id === action.id && m.type === 'TEXT'
           ? { ...m, data: { ...m.data, ...action.data } }
           : m,
       );
@@ -169,6 +202,43 @@ function reducer(state: AppState, action: SceneAction): AppState {
   }
 }
 
-export function useScene(): [AppState, Dispatch<SceneAction>] {
-  return useReducer(reducer, INITIAL_STATE);
+export interface HistoryState {
+  past: AppState[];
+  present: AppState;
+  future: AppState[];
+}
+
+const MAX_HISTORY = 30;
+// Selection/tool changes aren't "content" — recording them would make Ctrl+Z feel broken.
+const NON_HISTORY_TYPES = new Set<ContentAction['type']>(['SELECT_MARKER', 'SET_TOOL']);
+// Loading a different project/image invalidates any earlier history entirely.
+const RESET_HISTORY_TYPES = new Set<ContentAction['type']>(['SET_IMAGE', 'CLEAR_IMAGE', 'RESTORE_SESSION']);
+
+export function historyReducer(hs: HistoryState, action: SceneAction): HistoryState {
+  if (action.type === 'UNDO') {
+    const prev = hs.past[hs.past.length - 1];
+    if (!prev) return hs;
+    return { past: hs.past.slice(0, -1), present: prev, future: [hs.present, ...hs.future].slice(0, MAX_HISTORY) };
+  }
+  if (action.type === 'REDO') {
+    const next = hs.future[0];
+    if (!next) return hs;
+    return { past: [...hs.past, hs.present].slice(-MAX_HISTORY), present: next, future: hs.future.slice(1) };
+  }
+
+  const nextPresent = reducer(hs.present, action);
+  if (nextPresent === hs.present) return hs;
+  if (RESET_HISTORY_TYPES.has(action.type)) return { past: [], present: nextPresent, future: [] };
+  if (NON_HISTORY_TYPES.has(action.type)) return { ...hs, present: nextPresent };
+  return { past: [...hs.past, hs.present].slice(-MAX_HISTORY), present: nextPresent, future: [] };
+}
+
+export interface HistoryInfo {
+  canUndo: boolean;
+  canRedo: boolean;
+}
+
+export function useScene(): [AppState, Dispatch<SceneAction>, HistoryInfo] {
+  const [hs, dispatch] = useReducer(historyReducer, { past: [], present: INITIAL_STATE, future: [] });
+  return [hs.present, dispatch, { canUndo: hs.past.length > 0, canRedo: hs.future.length > 0 }];
 }

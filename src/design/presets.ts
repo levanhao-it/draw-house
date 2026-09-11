@@ -82,6 +82,22 @@ export const PRESETS: Preset[] = [
     font: 'Inter',
     suggestFor: ['map'],
   },
+  {
+    id: 'black_white',
+    label: 'Black & White',
+    cardBg: '#FFFFFF',
+    accent: '#111111',
+    textPrimary: '#000000',
+    textSecondary: '#555555',
+    dimAlpha: 0.35,
+    cardRadius: 14,
+    cardEdge: 'accentBar',
+    arrowStyle: 'straight',
+    arrowWidth: 7,
+    arrowCurve: 0.0,
+    font: 'Inter',
+    suggestFor: ['perspective'],
+  },
 ];
 
 export const PRESET_MAP = Object.fromEntries(
