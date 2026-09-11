@@ -12,6 +12,8 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "gifenc": "^1.0.3",
+    "qrcode-generator": "^2.0.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

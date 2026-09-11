@@ -64,6 +64,22 @@ export default function UnitForm({ marker, dispatch, truncated }: Props) {
         </div>
       ))}
 
+      {/* Spotlight radius — "bán kính vùng sáng" */}
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-neutral-400">
+          {vi.spotlight.radius} — {Math.round(marker.radius * 100)}%
+        </label>
+        <input
+          type="range"
+          min={0.02}
+          max={0.25}
+          step={0.005}
+          value={marker.radius}
+          onChange={e => dispatch({ type: 'UPDATE_UNIT_RADIUS', id: marker.id, radius: parseFloat(e.target.value) })}
+          className="w-full accent-yellow-400"
+        />
+      </div>
+
       {/* Status */}
       <div className="flex flex-col gap-1">
         <label className="text-xs text-neutral-400">{vi.fields.status}</label>

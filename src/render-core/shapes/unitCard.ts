@@ -3,6 +3,7 @@ import { formatPriceDisplay } from '../text/formatPrice';
 import { wrapText } from '../text/wrap';
 import { TYPO, FONT_STACK, ELEVATION, SPACE, CARD_W_1080, CARD_W_1080_MAX } from '../../design/tokens';
 import { FIELD_ICONS, type FieldIconKey } from '../../design/icons';
+import { FULL_REVEAL, easeOutCubic, landedPulse, type MarkerReveal } from '../animation';
 import type { Preset } from '../../design/presets';
 import type { UnitMarker } from '../../types/index';
 import type { CardPlacement } from '../place';
@@ -17,21 +18,33 @@ const FIELD_ICON_SZ_1080   = 13;
 const FIELD_ICON_CHIP_MULT = 1.7; // chip (soft circular backdrop) diameter relative to icon size
 const FIELD_ICON_GAP_1080  = 5;
 
-/** Returns true if any field was truncated to fit MAX_CARD_LINES. */
+/** Returns true if any field was truncated to fit MAX_CARD_LINES. `reveal` (default: fully
+ *  shown) slides the card up + scales it in (0.9→1), plus a brief highlight flash on the
+ *  price band shortly after landing — used by the animated (video/GIF) export. */
 export function drawUnitCard(
   ctx: CanvasRenderingContext2D,
   placement: CardPlacement,
   marker: UnitMarker,
   preset: Preset,
   scale: number,
+  reveal: MarkerReveal = FULL_REVEAL,
 ): boolean {
   const { x, y, w, h } = placement;
   const pad = SPACE.sm * scale;
   const r   = preset.cardRadius * scale;
   const { fields, truncated } = truncateFields(marker.data);
 
+  const ease = easeOutCubic(reveal.p);
+  const priceHighlight = landedPulse(reveal.sinceLandedSec, 0.2, 0.35);
+
   ctx.save();
-  if (marker.status === 'sold') ctx.globalAlpha = 0.65;
+  // Slide up from below + pop from 0.9→1 scale, both around the card's own centre.
+  const ccx = x + w / 2, ccy = y + h / 2;
+  ctx.translate(ccx, ccy);
+  ctx.scale(0.9 + 0.1 * ease, 0.9 + 0.1 * ease);
+  ctx.translate(-ccx, -ccy);
+  ctx.translate(0, (1 - ease) * 40 * scale);
+  ctx.globalAlpha = marker.status === 'sold' ? 0.65 * ease : ease;
 
   // ── background + drop shadow ──────────────────────────────
   ctx.shadowColor   = ELEVATION.card.shadowColor;
@@ -121,6 +134,17 @@ export function drawUnitCard(
     ctx.roundRect(bX, bY, bW, bH, bR);
     ctx.fill();
     ctx.restore();
+
+    // "Dòng giá highlight sau 0.2s": a brief white flash right after the card lands
+    if (priceHighlight > 0) {
+      ctx.save();
+      ctx.globalAlpha = priceHighlight * 0.55;
+      ctx.fillStyle   = '#FFFFFF';
+      ctx.beginPath();
+      ctx.roundRect(bX, bY, bW, bH, bR);
+      ctx.fill();
+      ctx.restore();
+    }
 
     const t3Color = isLightHex(preset.accent) ? 'rgba(0,0,0,.85)' : 'rgba(255,255,255,.93)';
     const t3Parts: Array<{ key: FieldIconKey; text: string }> = [];

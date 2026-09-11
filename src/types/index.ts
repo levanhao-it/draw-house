@@ -10,6 +10,47 @@ export type DisplayMode = 'auto' | 'callout' | 'legend';
 export type SpotlightMode = 'normal' | 'spotlight';
 export type UnitStatus = 'available' | 'hold' | 'sold';
 
+/** User-adjustable spotlight look (sale muốn "vùng sáng vào đúng căn, tối phần còn lại").
+ *  `dimAlpha: null` means "use the active preset's own dimAlpha" until explicitly overridden. */
+export interface SpotlightSettings {
+  dimAlpha: number | null; // 0..1 — how dark the surrounding background gets
+  softness: number;        // 0..1.5 — edge feather size, as a fraction of the unit's radius
+  intensity: number;       // 0..1 — how fully lit the spotlight centre is
+}
+
+// Matches the original hardcoded look exactly (feather was a fixed 1.6x radius i.e.
+// softness=0.6, erase was always fully opaque i.e. intensity=1).
+export const DEFAULT_SPOTLIGHT_SETTINGS: SpotlightSettings = {
+  dimAlpha: null,
+  softness: 0.6,
+  intensity: 1,
+};
+
+export type OverlayCorner = 'tl' | 'tr' | 'bl' | 'br';
+
+/** Compass rose overlay (F19) — North is manual (no real geodata), sale kéo lệch theo ảnh.
+ *  Sun/wind are optional extra needles on the same rose ("hướng nắng/gió"). Degrees are
+ *  clockwise from straight up (0 = up, 90 = right, 180 = down, 270 = left). */
+export interface CompassSettings {
+  show: boolean;
+  corner: OverlayCorner;
+  northDeg: number;
+  showSun: boolean;
+  sunDeg: number;
+  showWind: boolean;
+  windDeg: number;
+}
+
+export const DEFAULT_COMPASS: CompassSettings = {
+  show: false,
+  corner: 'tl',
+  northDeg: 0,
+  showSun: false,
+  sunDeg: 45,
+  showWind: false,
+  windDeg: 135,
+};
+
 export type MarkerType = 'UNIT' | 'POI' | 'ROUTE' | 'ZONE' | 'ARROW' | 'TEXT';
 
 export interface LayoutOverride {

@@ -134,7 +134,7 @@ export default function StageCanvas({ state, dispatch }: Props) {
     cardPlacements.current = mode === 'callout' ? getCardPlacements(state.markers, displaySize, ctx, preset) : new Map();
 
     const doRender = (img: HTMLImageElement) => {
-      renderScene(ctx, img, renderMarkers, displaySize, preset, state.brand, state.disclaimer, state.displayMode, state.spotlightMode);
+      renderScene(ctx, img, renderMarkers, displaySize, preset, state.brand, state.disclaimer, state.displayMode, state.spotlightMode, state.spotlightSettings, state.compass);
       drawPendingOverlay(ctx, pendingPath, displaySize, preset.accent);
       // Draw resize/move handles for the selected marker
       if (state.selectedMarkerId) {
@@ -143,7 +143,10 @@ export default function StageCanvas({ state, dispatch }: Props) {
         if (rect) drawCardHandles(ctx, rect, preset.accent);
 
         const selMarker = renderMarkers.find(m => m.id === state.selectedMarkerId);
-        if (selMarker) {
+        // Match onPointerDown's drag-eligibility rule: don't show vertex handles as if
+        // draggable once a DIFFERENT path tool (e.g. ZONE) is active than the one that
+        // made this marker (e.g. ROUTE) — they'd no longer respond to a click there.
+        if (selMarker && (!isPathTool || selMarker.type === state.activeTool)) {
           const points = getMarkerPoints(selMarker).map(p => toPx(p.pos, displaySize));
           drawPointHandles(ctx, points, preset.accent);
         }
@@ -298,9 +301,12 @@ export default function StageCanvas({ state, dispatch }: Props) {
     // Point handles on the selected marker — works for any marker type's point(s).
     // Checked BEFORE the isPathTool bail-out so an existing ROUTE/ZONE/ARROW marker's
     // own vertices stay draggable even while that same tool is still active (the most
-    // common case right after drawing one).
+    // common case right after drawing one). Switching tools doesn't clear selection, so
+    // once a DIFFERENT path tool is active (e.g. a ROUTE stays selected but the user
+    // switched to ZONE), its handles must stop intercepting clicks meant to start the
+    // new path — otherwise the old marker stays editable under the "wrong" tool.
     const selected = state.markers.find(m => m.id === state.selectedMarkerId);
-    if (selected) {
+    if (selected && (!isPathTool || selected.type === state.activeTool)) {
       const HANDLE_R = 14;
       for (const { ref, pos } of getMarkerPoints(selected)) {
         const p = toPx(pos, displaySize);
@@ -340,7 +346,10 @@ export default function StageCanvas({ state, dispatch }: Props) {
         return;
       }
     }
-  }, [displaySize, isPathTool, state.markers, state.selectedMarkerId, dispatch]);
+  // state.activeTool is read directly in the body (not just via the isPathTool bool),
+  // and isPathTool alone can stay `true` across a ROUTE→ZONE switch — so it must be
+  // listed explicitly or this callback would keep a stale tool value after such a switch.
+  }, [displaySize, isPathTool, state.markers, state.selectedMarkerId, state.activeTool, dispatch]);
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     const pointDrag = pointDragRef.current;

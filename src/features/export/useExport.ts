@@ -41,7 +41,7 @@ export function useExport(state: AppState) {
 
       const img    = await loadImage(state.image.originalSrc);
       const preset = getPreset(state.preset);
-      renderScene(ctx, img, state.markers, frame, preset, state.brand, state.disclaimer, state.displayMode, state.spotlightMode);
+      renderScene(ctx, img, state.markers, frame, preset, state.brand, state.disclaimer, state.displayMode, state.spotlightMode, state.spotlightSettings, state.compass);
 
       canvas.toBlob(blob => {
         if (blob) downloadBlob(blob, 'vecan_export.png');

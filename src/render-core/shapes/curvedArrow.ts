@@ -1,5 +1,6 @@
-import { bezierPoints, type Vec2 } from '../geom';
+import { bezierPoints, pathLength, type Vec2 } from '../geom';
 import { ARROW_OUTLINE, ELEVATION } from '../../design/tokens';
+import { FULL_REVEAL, type MarkerReveal } from '../animation';
 import type { Preset } from '../../design/presets';
 
 export interface ArrowOpts {
@@ -8,11 +9,15 @@ export interface ArrowOpts {
   to: Vec2;
   preset: Preset;
   scale: number; // frame.w / 1080
+  /** Default: fully drawn. Animates the line drawing along its own length, arrowhead
+   *  last — used by the animated (video/GIF) export ("vẽ dần theo chiều dài"). */
+  reveal?: MarkerReveal;
 }
 
 /** Draw a quadratic Bézier arrow with mandatory white outline + shadow + arrowhead (R1). */
 export function drawCurvedArrow(ctx: CanvasRenderingContext2D, opts: ArrowOpts): void {
-  const { from, ctrl, to, preset, scale } = opts;
+  const { from, ctrl, to, preset, scale, reveal = FULL_REVEAL } = opts;
+  const { p } = reveal;
   const pts     = bezierPoints(from, ctrl, to, 24);
   const strokeW = preset.arrowWidth * scale;
   const outlineW = ARROW_OUTLINE.strokeWidth * scale;
@@ -30,8 +35,17 @@ export function drawCurvedArrow(ctx: CanvasRenderingContext2D, opts: ArrowOpts):
   // Stop the stroked line at the arrowhead's base, not the tip — otherwise its
   // round line-cap pokes out past the point and the tip looks blunt/lumpy.
   const lineEnd = { x: to.x - dir.x * headLen, y: to.y - dir.y * headLen };
-  const linePts = pts.filter(p => Math.hypot(p.x - to.x, p.y - to.y) > headLen);
+  const linePts = pts.filter(p2 => Math.hypot(p2.x - to.x, p2.y - to.y) > headLen);
   linePts.push(lineEnd);
+
+  // While revealing, a single growing dash (then a gap covering the rest) draws the line
+  // progressively along its length, overriding any artistic dash style until it lands.
+  const revealTotal = p < 1 ? pathLength(linePts) : 0;
+  function applyLineDash() {
+    if (p < 1) { ctx.setLineDash([revealTotal * p, revealTotal]); ctx.lineDashOffset = 0; }
+    else if (isDashed) { ctx.setLineDash(dash); }
+    else { ctx.setLineDash([]); }
+  }
 
   // ---- outline pass (wider, drawn first) ----
   ctx.save();
@@ -42,7 +56,7 @@ export function drawCurvedArrow(ctx: CanvasRenderingContext2D, opts: ArrowOpts):
   ctx.lineWidth     = strokeW + outlineW;
   ctx.lineCap       = 'round';
   ctx.lineJoin      = 'round';
-  if (isDashed) ctx.setLineDash(dash);
+  applyLineDash();
   drawPath(ctx, linePts);
   ctx.stroke();
   ctx.setLineDash([]);
@@ -54,14 +68,18 @@ export function drawCurvedArrow(ctx: CanvasRenderingContext2D, opts: ArrowOpts):
   ctx.lineWidth   = strokeW;
   ctx.lineCap     = 'round';
   ctx.lineJoin    = 'round';
-  if (isDashed) ctx.setLineDash(dash);
+  applyLineDash();
   drawPath(ctx, linePts);
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.restore();
 
   // ---- arrowhead: white halo + accent fill, sized off the line's own width ----
+  // Held back until the line has almost finished drawing, then pops in.
+  const headAlpha = Math.max(0, Math.min(1, (p - 0.85) / 0.15));
+  if (headAlpha <= 0) return;
   ctx.save();
+  ctx.globalAlpha   = headAlpha;
   ctx.shadowColor   = ELEVATION.arrow.shadowColor;
   ctx.shadowBlur    = ELEVATION.arrow.shadowBlur * scale;
   ctx.shadowOffsetY = ELEVATION.arrow.shadowOffsetY * scale;

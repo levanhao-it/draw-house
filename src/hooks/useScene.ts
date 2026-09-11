@@ -1,10 +1,10 @@
 import { useReducer, type Dispatch } from 'react';
 import type {
   Marker, UnitMarker, PoiMarker, RouteMarker, ZoneMarker, ArrowMarker, TextMarker,
-  SceneImage, Ratio, PresetId, BrandKit, MarkerType, DisplayMode, SpotlightMode,
-  LayoutOverride, NormPoint,
+  SceneImage, Ratio, PresetId, BrandKit, MarkerType, DisplayMode, SpotlightMode, SpotlightSettings,
+  CompassSettings, LayoutOverride, NormPoint,
 } from '../types/index';
-import { DEFAULT_DISCLAIMER } from '../types/index';
+import { DEFAULT_DISCLAIMER, DEFAULT_SPOTLIGHT_SETTINGS, DEFAULT_COMPASS } from '../types/index';
 import { withMarkerPoint, type PointRef } from '../types/markerPoints';
 
 export interface AppState {
@@ -17,6 +17,8 @@ export interface AppState {
   preset: PresetId;
   displayMode: DisplayMode;
   spotlightMode: SpotlightMode;
+  spotlightSettings: SpotlightSettings;
+  compass: CompassSettings;
   brand: BrandKit;
   disclaimer: string;
 }
@@ -26,6 +28,7 @@ export type ContentAction =
   | { type: 'ADD_MARKER'; marker: Marker }
   | { type: 'UPDATE_UNIT_DATA'; id: string; data: Partial<UnitMarker['data']> }
   | { type: 'UPDATE_UNIT_STATUS'; id: string; status: UnitMarker['status'] }
+  | { type: 'UPDATE_UNIT_RADIUS'; id: string; radius: number }
   | { type: 'UPDATE_POI_DATA'; id: string; data: Partial<PoiMarker['data']> }
   | { type: 'UPDATE_ROUTE_DATA'; id: string; data: Partial<RouteMarker['data']> }
   | { type: 'UPDATE_ZONE_DATA'; id: string; data: Partial<ZoneMarker['data']> }
@@ -39,6 +42,8 @@ export type ContentAction =
   | { type: 'SET_PRESET'; preset: PresetId }
   | { type: 'SET_DISPLAY_MODE'; mode: DisplayMode }
   | { type: 'SET_SPOTLIGHT_MODE'; mode: SpotlightMode }
+  | { type: 'SET_SPOTLIGHT_SETTINGS'; patch: Partial<SpotlightSettings> }
+  | { type: 'SET_COMPASS'; patch: Partial<CompassSettings> }
   | { type: 'REORDER_MARKERS'; fromIndex: number; toIndex: number }
   | { type: 'UPDATE_BRAND'; patch: Partial<BrandKit> }
   | { type: 'UPDATE_LAYOUT'; id: string; layout: Partial<LayoutOverride> }
@@ -65,6 +70,8 @@ export const INITIAL_STATE: AppState = {
   preset: 'neon_spotlight',
   displayMode: 'auto',
   spotlightMode: 'spotlight',
+  spotlightSettings: DEFAULT_SPOTLIGHT_SETTINGS,
+  compass: DEFAULT_COMPASS,
   brand: INITIAL_BRAND,
   disclaimer: DEFAULT_DISCLAIMER,
 };
@@ -95,6 +102,13 @@ function reducer(state: AppState, action: ContentAction): AppState {
     case 'UPDATE_UNIT_STATUS': {
       const markers = state.markers.map((m): Marker =>
         m.id === action.id && m.type === 'UNIT' ? { ...m, status: action.status } : m,
+      );
+      return { ...state, markers };
+    }
+
+    case 'UPDATE_UNIT_RADIUS': {
+      const markers = state.markers.map((m): Marker =>
+        m.id === action.id && m.type === 'UNIT' ? { ...m, radius: action.radius } : m,
       );
       return { ...state, markers };
     }
@@ -176,6 +190,12 @@ function reducer(state: AppState, action: ContentAction): AppState {
     case 'SET_SPOTLIGHT_MODE':
       return { ...state, spotlightMode: action.mode };
 
+    case 'SET_SPOTLIGHT_SETTINGS':
+      return { ...state, spotlightSettings: { ...state.spotlightSettings, ...action.patch } };
+
+    case 'SET_COMPASS':
+      return { ...state, compass: { ...state.compass, ...action.patch } };
+
     case 'REORDER_MARKERS': {
       const arr = [...state.markers];
       const [moved] = arr.splice(action.fromIndex, 1);
@@ -195,7 +215,14 @@ function reducer(state: AppState, action: ContentAction): AppState {
     }
 
     case 'RESTORE_SESSION':
-      return { ...INITIAL_STATE, ...action.payload };
+      // Merge (not overwrite) spotlightSettings/compass — old saved sessions predate these
+      // fields and partial payloads shouldn't wipe out the other defaults with `undefined`.
+      return {
+        ...INITIAL_STATE,
+        ...action.payload,
+        spotlightSettings: { ...INITIAL_STATE.spotlightSettings, ...action.payload.spotlightSettings },
+        compass: { ...INITIAL_STATE.compass, ...action.payload.compass },
+      };
 
     case 'CLEAR_IMAGE':
       return { ...INITIAL_STATE, brand: state.brand };

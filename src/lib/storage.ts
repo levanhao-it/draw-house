@@ -15,6 +15,8 @@ export interface SessionSnapshot {
   preset: AppState['preset'];
   displayMode: AppState['displayMode'];
   spotlightMode: AppState['spotlightMode'];
+  spotlightSettings: AppState['spotlightSettings'];
+  compass: AppState['compass'];
   brand: BrandKit;
   disclaimer: string;
   image: PersistedImage | null;
@@ -62,6 +64,8 @@ export async function saveSession(state: AppState): Promise<void> {
     preset:       state.preset,
     displayMode:  state.displayMode,
     spotlightMode: state.spotlightMode,
+    spotlightSettings: state.spotlightSettings,
+    compass:      state.compass,
     brand:        state.brand,
     disclaimer:   state.disclaimer,
     image: state.image

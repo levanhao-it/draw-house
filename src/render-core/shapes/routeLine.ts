@@ -1,9 +1,12 @@
 import { toPx, type Size } from '../geom';
 import { TYPO, FONT_STACK, ELEVATION, SPACE } from '../../design/tokens';
+import { FULL_REVEAL, type MarkerReveal } from '../animation';
 import type { RouteMarker } from '../../types/index';
 import type { Preset } from '../../design/presets';
 
-/** Draw a route polyline with a direction-aware label on the longest segment. */
+/** Draw a route polyline with a direction-aware label on the longest segment.
+ *  `reveal` (default: fully shown) fades the line AND its label together at the same
+ *  rate — they must never desync (label popping in ahead of/behind the line). */
 export function drawRouteLine(
   ctx: CanvasRenderingContext2D,
   marker: RouteMarker,
@@ -11,6 +14,7 @@ export function drawRouteLine(
   preset: Preset,
   scale: number,
   showLabel = true,
+  reveal: MarkerReveal = FULL_REVEAL,
 ): void {
   if (marker.path.length < 2) return;
 
@@ -20,6 +24,7 @@ export function drawRouteLine(
   const outlineW = 3 * scale;
   const isDashed = marker.data.style === 'dashed';
   const dash   = isDashed ? [10 * scale, 6 * scale] : [];
+  const { p } = reveal;
 
   function tracePath() {
     ctx.beginPath();
@@ -29,6 +34,7 @@ export function drawRouteLine(
 
   // ---- outline pass ----
   ctx.save();
+  ctx.globalAlpha   = p;
   ctx.strokeStyle   = 'rgba(255,255,255,0.85)';
   ctx.lineWidth     = lineW + outlineW;
   ctx.lineCap       = 'round';
@@ -44,6 +50,7 @@ export function drawRouteLine(
 
   // ---- colour pass ----
   ctx.save();
+  ctx.globalAlpha = p;
   ctx.strokeStyle = color;
   ctx.lineWidth   = lineW;
   ctx.lineCap     = 'round';
@@ -54,7 +61,7 @@ export function drawRouteLine(
   ctx.setLineDash([]);
   ctx.restore();
 
-  if (!showLabel || !marker.data.name) return;
+  if (!showLabel || !marker.data.name || p <= 0) return;
 
   // Find the longest segment for label placement
   let maxLen = 0, segIdx = 0;
@@ -82,6 +89,7 @@ export function drawRouteLine(
   const liftY = lineW / 2 + lH * 0.6 + 2 * scale; // float just above the line
 
   ctx.save();
+  ctx.globalAlpha = p;
   ctx.translate(mx, my);
   ctx.rotate(angle);
 
@@ -89,11 +97,11 @@ export function drawRouteLine(
   ctx.shadowColor  = 'rgba(0,0,0,0.35)';
   ctx.shadowBlur   = 6 * scale;
   ctx.fillStyle    = preset.cardBg;
-  ctx.globalAlpha  = 0.93;
+  ctx.globalAlpha  = 0.93 * p;
   ctx.beginPath();
   ctx.roundRect(-lW / 2, -liftY - lH, lW, lH, lH / 2);
   ctx.fill();
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = p;
   ctx.shadowColor = 'transparent';
 
   // Colour dot

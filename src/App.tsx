@@ -13,9 +13,12 @@ import ArrowForm from './features/forms/ArrowForm';
 import TextForm from './features/forms/TextForm';
 import ExportPanel from './features/export/ExportPanel';
 import PresetPicker from './features/presets/PresetPicker';
+import { getPreset } from './design/presets';
 import BrandKitModal from './features/brand/BrandKitModal';
+import CompassModal from './features/compass/CompassModal';
 import { useAutosave } from './features/persistence/useAutosave';
 import { loadSession } from './lib/storage';
+import { vi } from './i18n/vi';
 
 const TOOL_SHORTCUTS: Record<string, MarkerType> = {
   '1': 'UNIT', '2': 'POI', '3': 'ROUTE', '4': 'ZONE', '5': 'ARROW', '6': 'TEXT',
@@ -24,6 +27,7 @@ const TOOL_SHORTCUTS: Record<string, MarkerType> = {
 function App() {
   const [state, dispatch, history] = useScene();
   const [showBrand, setShowBrand] = useState(false);
+  const [showCompass, setShowCompass] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const didRestore = useRef(false);
 
@@ -83,6 +87,8 @@ function App() {
             preset:       snapshot.preset,
             displayMode:  snapshot.displayMode,
             spotlightMode: snapshot.spotlightMode,
+            spotlightSettings: snapshot.spotlightSettings,
+            compass:      snapshot.compass,
             brand:        snapshot.brand,
             disclaimer:   snapshot.disclaimer,
             step: 2,
@@ -108,6 +114,9 @@ function App() {
     <>
     {showBrand && (
       <BrandKitModal brand={state.brand} dispatch={dispatch} onClose={() => setShowBrand(false)} />
+    )}
+    {showCompass && (
+      <CompassModal compass={state.compass} dispatch={dispatch} onClose={() => setShowCompass(false)} />
     )}
     <div className="h-screen flex flex-col bg-neutral-950 text-white overflow-hidden">
       <MarkerToolbar
@@ -169,6 +178,49 @@ function App() {
             ))}
           </div>
 
+          {/* Spotlight tuning — "vùng sáng vào đúng căn, tối phần còn lại" */}
+          {state.spotlightMode === 'spotlight' && (
+            <div className="px-3 py-3 border-t border-neutral-800 flex flex-col gap-3">
+              <h3 className="text-xs font-semibold text-neutral-400">{vi.spotlight.title}</h3>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-neutral-500">
+                  {vi.spotlight.dimAlpha} — {Math.round((state.spotlightSettings.dimAlpha ?? getPreset(state.preset).dimAlpha) * 100)}%
+                </label>
+                <input
+                  type="range" min={0.1} max={0.8} step={0.05}
+                  value={state.spotlightSettings.dimAlpha ?? getPreset(state.preset).dimAlpha}
+                  onChange={e => dispatch({ type: 'SET_SPOTLIGHT_SETTINGS', patch: { dimAlpha: parseFloat(e.target.value) } })}
+                  className="w-full accent-yellow-400"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-neutral-500">
+                  {vi.spotlight.softness} — {Math.round(state.spotlightSettings.softness * 100)}%
+                </label>
+                <input
+                  type="range" min={0} max={1.5} step={0.05}
+                  value={state.spotlightSettings.softness}
+                  onChange={e => dispatch({ type: 'SET_SPOTLIGHT_SETTINGS', patch: { softness: parseFloat(e.target.value) } })}
+                  className="w-full accent-yellow-400"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-neutral-500">
+                  {vi.spotlight.intensity} — {Math.round(state.spotlightSettings.intensity * 100)}%
+                </label>
+                <input
+                  type="range" min={0.2} max={1} step={0.05}
+                  value={state.spotlightSettings.intensity}
+                  onChange={e => dispatch({ type: 'SET_SPOTLIGHT_SETTINGS', patch: { intensity: parseFloat(e.target.value) } })}
+                  className="w-full accent-yellow-400"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="border-t border-neutral-800">
             {selected?.type === 'UNIT' && (
             <>
@@ -213,15 +265,23 @@ function App() {
           <PresetPicker current={state.preset} dispatch={dispatch} />
 
           {/* Brand Kit button (T-402) */}
-          <div className="px-3 py-2 border-t border-neutral-800">
+          <div className="px-3 py-2 border-t border-neutral-800 flex gap-2">
             <button
               type="button"
               onClick={() => setShowBrand(true)}
-              className="w-full h-11 rounded-lg text-xs font-medium bg-neutral-800 text-neutral-300 hover:bg-neutral-700 flex items-center justify-center gap-1.5"
+              className="flex-1 h-11 rounded-lg text-xs font-medium bg-neutral-800 text-neutral-300 hover:bg-neutral-700 flex items-center justify-center gap-1.5"
             >
               🎨 Brand Kit
               {!state.brand.hotline && <span className="text-red-400">(☁️)</span>}
               {state.brand.hotline && <span className="text-yellow-400/70">• {state.brand.hotline}</span>}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowCompass(true)}
+              className="flex-1 h-11 rounded-lg text-xs font-medium bg-neutral-800 text-neutral-300 hover:bg-neutral-700 flex items-center justify-center gap-1.5"
+            >
+              {vi.compass.button}
+              {state.compass.show && <span className="text-yellow-400/70">•</span>}
             </button>
           </div>
 

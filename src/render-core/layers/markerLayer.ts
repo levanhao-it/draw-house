@@ -9,18 +9,25 @@ import { drawTextTag } from '../shapes/textTag';
 import { toPx, type Size, type Rect } from '../geom';
 import { resolveDisplayMode, drawLegend } from './legendLayer';
 import { TYPO, FONT_STACK, SPACE, ELEVATION } from '../../design/tokens';
+import { FULL_REVEAL, type MarkerReveal } from '../animation';
 import type { Marker, UnitMarker, PoiMarker, RouteMarker, ZoneMarker, ArrowMarker, TextMarker, DisplayMode } from '../../types/index';
 import type { Preset } from '../../design/presets';
 
 const BADGE_R_1080 = 22;
 
-/** Draw all markers. Returns array of marker IDs where card content was truncated. */
+/** Draw all markers. Returns array of marker IDs where card content was truncated.
+ *  `revealOf` (default: always fully revealed) drives each marker's own entrance effect
+ *  (per-type: see zonePolygon/curvedArrow/unitCard/poiPill/textTag) — used by the animated
+ *  (video/GIF) export for a one-by-one reveal. Collision layout always still uses the full
+ *  `markers` array regardless of reveal, so revealed cards never jump position as later
+ *  ones appear. */
 export function drawMarkers(
   ctx: CanvasRenderingContext2D,
   markers: Marker[],
   frame: Size,
   preset: Preset,
   displayMode: DisplayMode = 'auto',
+  revealOf: (id: string) => MarkerReveal = () => FULL_REVEAL,
 ): string[] {
   if (markers.length === 0) return [];
 
@@ -30,21 +37,23 @@ export function drawMarkers(
 
   // Always render geometric features (routes, zones, standalone arrows)
   for (const m of markers) {
-    if (m.type === 'ROUTE') drawRouteLine(ctx, m as RouteMarker, frame, preset, scale, mode === 'callout');
-    if (m.type === 'ZONE')  drawZonePolygon(ctx, m as ZoneMarker, frame, preset, scale, mode === 'callout');
-    if (m.type === 'ARROW') drawArrowAnnotation(ctx, m as ArrowMarker, frame, preset, scale);
+    const reveal = revealOf(m.id);
+    if (m.type === 'ROUTE') drawRouteLine(ctx, m as RouteMarker, frame, preset, scale, mode === 'callout', reveal);
+    if (m.type === 'ZONE')  drawZonePolygon(ctx, m as ZoneMarker, frame, preset, scale, mode === 'callout', reveal);
+    if (m.type === 'ARROW') drawArrowAnnotation(ctx, m as ArrowMarker, frame, preset, scale, reveal);
   }
 
   if (mode === 'callout') {
     // POI pills + freestanding text tags
     for (const m of markers) {
+      const reveal = revealOf(m.id);
       if (m.type === 'POI') {
         const px = toPx((m as PoiMarker).point, frame);
-        drawPoiPill(ctx, px.x, px.y, m as PoiMarker, preset, scale);
+        drawPoiPill(ctx, px.x, px.y, m as PoiMarker, preset, scale, reveal);
       }
       if (m.type === 'TEXT') {
         const px = toPx((m as TextMarker).point, frame);
-        drawTextTag(ctx, px.x, px.y, m as TextMarker, preset, scale);
+        drawTextTag(ctx, px.x, px.y, m as TextMarker, preset, scale, reveal);
       }
     }
 
@@ -68,7 +77,8 @@ export function drawMarkers(
       })();
       placedRects.push({ x: placement.x, y: placement.y, w: cardW, h: cardH });
 
-      const wasTruncated = drawUnitCard(ctx, placement, m, preset, effectiveScale);
+      const reveal = revealOf(m.id);
+      const wasTruncated = drawUnitCard(ctx, placement, m, preset, effectiveScale, reveal);
       if (wasTruncated) truncatedIds.push(m.id);
 
       const cardCx = placement.x + cardW / 2;
@@ -91,14 +101,17 @@ export function drawMarkers(
       const cx    = frame.w / 2, cy = frame.h / 2;
       const ctrl  = Math.hypot(perpA.x - cx, perpA.y - cy) < Math.hypot(perpB.x - cx, perpB.y - cy)
         ? perpA : perpB;
-      drawCurvedArrow(ctx, { from, ctrl, to, preset, scale });
+      drawCurvedArrow(ctx, { from, ctrl, to, preset, scale, reveal });
     }
   } else {
     // Legend mode: draw numbered badges at each marker's point/centroid
     const badgeR = BADGE_R_1080 * scale;
     for (const m of markers) {
       const { bx, by } = badgeCenter(m, frame);
+      ctx.save();
+      ctx.globalAlpha = revealOf(m.id).p;
       drawNumberBadge(ctx, bx, by, badgeR, m.order, preset, scale);
+      ctx.restore();
     }
     drawLegend(ctx, markers, frame, preset, scale);
   }
@@ -130,13 +143,15 @@ function badgeCenter(m: Marker, frame: Size): { bx: number; by: number } {
   };
 }
 
-/** Freestanding annotation arrow (not tied to a UNIT card), with an optional floating label. */
+/** Freestanding annotation arrow (not tied to a UNIT card), with an optional floating label
+ *  that only appears once the line has (almost) finished drawing in. */
 function drawArrowAnnotation(
   ctx: CanvasRenderingContext2D,
   m: ArrowMarker,
   frame: Size,
   preset: Preset,
   scale: number,
+  reveal: MarkerReveal,
 ): void {
   const from = toPx(m.from, frame);
   const to   = toPx(m.to, frame);
@@ -148,11 +163,13 @@ function drawArrowAnnotation(
   const ctrl = { x: mid.x + nx * h, y: mid.y + ny * h };
 
   drawCurvedArrow(ctx, {
-    from, ctrl, to, scale,
+    from, ctrl, to, scale, reveal,
     preset: m.data.color ? { ...preset, accent: m.data.color } : preset,
   });
 
   if (!m.data.label) return;
+  const labelAlpha = Math.max(0, Math.min(1, (reveal.p - 0.85) / 0.15));
+  if (labelAlpha <= 0) return;
 
   const fontSize = TYPO.pill.size * scale;
   ctx.font = `${TYPO.pill.weight} ${fontSize}px ${FONT_STACK}`;
@@ -170,6 +187,7 @@ function drawArrowAnnotation(
   if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
 
   ctx.save();
+  ctx.globalAlpha = labelAlpha;
   ctx.translate(lx, ly);
   ctx.rotate(angle);
   ctx.shadowColor   = ELEVATION.card.shadowColor;

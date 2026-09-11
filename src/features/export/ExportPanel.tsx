@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { AppState, SceneAction } from '../../hooks/useScene';
 import { useExport } from './useExport';
+import { useAnimatedExport } from './useAnimatedExport';
 import { vi } from '../../i18n/vi';
 
 interface Props {
@@ -10,7 +11,9 @@ interface Props {
 
 export default function ExportPanel({ state, dispatch }: Props) {
   const { exportPng, exporting, needsHotline, setNeedsHotline } = useExport(state);
+  const { exportGif, exportVideo, exporting: exportingAnim, progress } = useAnimatedExport(state);
   const [hotlineInput, setHotlineInput] = useState('');
+  const [duration, setDuration] = useState(8);
 
   function saveHotline() {
     const val = hotlineInput.trim();
@@ -90,6 +93,53 @@ export default function ExportPanel({ state, dispatch }: Props) {
           </span>
         )}
       </button>
+
+      {/* Animated (video/GIF) export — marker reveal + Ken Burns zoom */}
+      <div className="flex flex-col gap-2 pt-2 border-t border-neutral-800">
+        <h3 className="text-sm font-semibold text-neutral-300">{vi.video.title}</h3>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-neutral-400">{vi.video.duration} — {duration}s</label>
+          <input
+            type="range"
+            min={6}
+            max={10}
+            step={1}
+            value={duration}
+            disabled={exportingAnim}
+            onChange={e => setDuration(parseInt(e.target.value, 10))}
+            className="w-full accent-yellow-400"
+          />
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={exportingAnim || !state.image}
+            onClick={() => void exportGif(duration)}
+            className="flex-1 min-h-[40px] bg-neutral-800 text-white font-medium rounded-xl hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm"
+          >
+            {vi.video.exportGif}
+          </button>
+          <button
+            type="button"
+            disabled={exportingAnim || !state.image}
+            onClick={() => void exportVideo(duration)}
+            className="flex-1 min-h-[40px] bg-neutral-800 text-white font-medium rounded-xl hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm"
+          >
+            {vi.video.exportVideo}
+          </button>
+        </div>
+        {exportingAnim && (
+          <div className="flex items-center gap-2 text-xs text-neutral-400">
+            <div className="flex-1 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-yellow-400 transition-[width]"
+                style={{ width: `${Math.round(progress * 100)}%` }}
+              />
+            </div>
+            <span>{vi.video.exporting} {Math.round(progress * 100)}%</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

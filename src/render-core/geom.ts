@@ -69,3 +69,14 @@ export function bezierPoints(p0: Vec2, ctrl: Vec2, p2: Vec2, seg = 20): Vec2[] {
   }
   return pts;
 }
+
+/** Total length of a polyline through `pts`; if `closed`, includes the segment back to pts[0]. */
+export function pathLength(pts: Vec2[], closed = false): number {
+  let total = 0;
+  for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i]!.x - pts[i - 1]!.x, pts[i]!.y - pts[i - 1]!.y);
+  if (closed && pts.length > 1) {
+    const first = pts[0]!, last = pts[pts.length - 1]!;
+    total += Math.hypot(first.x - last.x, first.y - last.y);
+  }
+  return total;
+}
