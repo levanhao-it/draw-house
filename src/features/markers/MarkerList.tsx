@@ -64,20 +64,20 @@ export default function MarkerList({ state, dispatch }: Props) {
               <span className={`flex-1 text-xs truncate ${isSelected ? 'text-white font-medium' : 'text-neutral-300'}`}>
                 {markerLabel(m)}
               </span>
-              {/* Reorder buttons */}
-              <div className="flex flex-col gap-0.5 shrink-0">
+              {/* Reorder buttons — wider tap area than the arrow glyph itself (fingertip-sized, not mouse-sized) */}
+              <div className="flex flex-col shrink-0 touch-manipulation">
                 <button
                   type="button"
                   disabled={idx === 0}
                   onClick={e => { e.stopPropagation(); dispatch({ type: 'REORDER_MARKERS', fromIndex: idx, toIndex: idx - 1 }); }}
-                  className="text-neutral-600 hover:text-neutral-300 disabled:opacity-20 text-[10px] leading-none px-0.5"
+                  className="w-7 h-4 flex items-center justify-center text-neutral-600 hover:text-neutral-300 disabled:opacity-20 text-[10px] leading-none"
                   title="Lên"
                 >▲</button>
                 <button
                   type="button"
                   disabled={idx === markers.length - 1}
                   onClick={e => { e.stopPropagation(); dispatch({ type: 'REORDER_MARKERS', fromIndex: idx, toIndex: idx + 1 }); }}
-                  className="text-neutral-600 hover:text-neutral-300 disabled:opacity-20 text-[10px] leading-none px-0.5"
+                  className="w-7 h-4 flex items-center justify-center text-neutral-600 hover:text-neutral-300 disabled:opacity-20 text-[10px] leading-none"
                   title="Xuống"
                 >▼</button>
               </div>
@@ -85,7 +85,7 @@ export default function MarkerList({ state, dispatch }: Props) {
               <button
                 type="button"
                 onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_MARKER', id: m.id }); }}
-                className="text-neutral-600 hover:text-red-400 transition-colors text-sm px-1 shrink-0"
+                className="w-8 h-8 flex items-center justify-center text-neutral-600 hover:text-red-400 transition-colors text-sm shrink-0 touch-manipulation"
                 title="Xoá"
               >✕</button>
             </li>

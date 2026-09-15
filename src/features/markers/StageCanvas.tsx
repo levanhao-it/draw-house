@@ -289,7 +289,7 @@ export default function StageCanvas({ state, dispatch }: Props) {
 
   // ── Drag-card handlers (T-401 lite) ───────────────────────────────────────
   const SNAP_PX = 8;
-  const RESIZE_ZONE = 18; // px from bottom-right corner that triggers resize
+  const RESIZE_ZONE = 22; // px from bottom-right corner that triggers resize (touch-sized)
 
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!displaySize.w) return;
@@ -307,7 +307,8 @@ export default function StageCanvas({ state, dispatch }: Props) {
     // new path — otherwise the old marker stays editable under the "wrong" tool.
     const selected = state.markers.find(m => m.id === state.selectedMarkerId);
     if (selected && (!isPathTool || selected.type === state.activeTool)) {
-      const HANDLE_R = 14;
+      // 20px (not the ~7px drawn ring) so a fingertip can reliably grab it on touch.
+      const HANDLE_R = 20;
       for (const { ref, pos } of getMarkerPoints(selected)) {
         const p = toPx(pos, displaySize);
         if (Math.hypot(cx - p.x, cy - p.y) <= HANDLE_R) {
@@ -360,7 +361,10 @@ export default function StageCanvas({ state, dispatch }: Props) {
       const cy = e.clientY - rect.top;
 
       if (!pointDrag.active) {
-        if (Math.hypot(cx - pointDrag.startX, cy - pointDrag.startY) < 3) return;
+        // Bigger dead-zone than a mouse would need — a resting finger/palm reports a few
+        // px of jitter on its own, which previously turned some plain taps into a tiny
+        // accidental drag.
+        if (Math.hypot(cx - pointDrag.startX, cy - pointDrag.startY) < 6) return;
         pointDrag.active = true;
         setDragCursor('cursor-grabbing');
       }
@@ -380,7 +384,8 @@ export default function StageCanvas({ state, dispatch }: Props) {
     const cy = e.clientY - rect.top;
 
     if (!drag.active) {
-      if (Math.hypot(cx - drag.startX, cy - drag.startY) < 5) return;
+      // Same touch dead-zone reasoning as the point-drag threshold above.
+      if (Math.hypot(cx - drag.startX, cy - drag.startY) < 8) return;
       drag.active = true;
       setDragCursor(drag.mode === 'resize' ? 'cursor-se-resize' : 'cursor-grabbing');
     }
@@ -438,7 +443,11 @@ export default function StageCanvas({ state, dispatch }: Props) {
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        className={`shadow-2xl rounded ${dragCursor}`}
+        // touch-none: let every gesture reach our own pointer handlers instead of the
+        // browser trying to pan/zoom the page with it (the classic "drag fights scroll"
+        // problem on iPad). select-none + touch-callout:none stop iOS's long-press
+        // selection magnifier/callout menu from popping up mid-drag.
+        className={`shadow-2xl rounded touch-none select-none [-webkit-touch-callout:none] ${dragCursor}`}
       />
 
       {/* Pending-path HUD */}
@@ -494,7 +503,7 @@ function drawCardHandles(
   rect: Rect,
   accent: string,
 ): void {
-  const HS = 12; // handle square size px
+  const HS = 14; // handle square size px (slightly bigger — matches the enlarged RESIZE_ZONE hit area)
   ctx.save();
 
   // Dashed selection border
@@ -524,7 +533,7 @@ function drawPointHandles(
   accent: string,
 ): void {
   if (points.length === 0) return;
-  const R = 7;
+  const R = 9; // slightly bigger — matches the enlarged HANDLE_R hit area
   ctx.save();
 
   if (points.length > 1) {
