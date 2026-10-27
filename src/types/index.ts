@@ -96,10 +96,31 @@ export interface PoiMarker extends MarkerBase {
   data: { icon: PoiIcon; name: string; dist?: string };
 }
 
+/** Lettering options shared by route labels and text markers. */
+export interface LabelStyle {
+  labelScale?: number;    // size multiplier, default 1
+  label3d?: boolean;      // extruded block lettering instead of the flat tag
+  label3dDepth?: number;  // downward extrusion multiplier, default 1
+  label3dDx?: number;     // sideways extrusion multiplier, negative = left; see labelDx
+  labelBold?: boolean;    // default true
+  labelItalic?: boolean;
+  labelUnderline?: boolean;
+  labelStrike?: boolean;
+  labelUpper?: boolean;   // ALL CAPS; wins over labelTitle
+  labelTitle?: boolean;   // Each Word Capitalised
+  labelSerif?: boolean;   // serif face instead of the app's sans
+  labelSpacing?: number;  // extra gap between letters as a fraction of the font size, default 0
+}
+
+/** Sideways extrusion of 3D lettering. Until the user sets it, it follows the depth at the original 0.6 slant. */
+export function labelDx(style: LabelStyle): number {
+  return style.label3dDx ?? 0.6 * (style.label3dDepth ?? 1);
+}
+
 export interface RouteMarker extends MarkerBase {
   type: 'ROUTE';
   path: NormPoint[];        // >= 2 points
-  data: { name: string; style: 'solid' | 'dashed'; color?: string };
+  data: { name: string; style: 'solid' | 'dashed'; color?: string } & LabelStyle;
 }
 
 export interface ZoneMarker extends MarkerBase {
@@ -118,7 +139,8 @@ export interface ArrowMarker extends MarkerBase {
 export interface TextMarker extends MarkerBase {
   type: 'TEXT';
   point: NormPoint;
-  data: { text: string };
+  // color overrides the preset's text/accent colour; angle is in degrees, clockwise
+  data: { text: string; color?: string; angle?: number } & LabelStyle;
 }
 
 export type Marker = UnitMarker | PoiMarker | RouteMarker | ZoneMarker | ArrowMarker | TextMarker;

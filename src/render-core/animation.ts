@@ -14,21 +14,22 @@ export const FULL_REVEAL: MarkerReveal = { p: 1, sinceLandedSec: Infinity };
 export interface MarkerTiming { startSec: number; fadeInSec: number }
 
 /**
- * Stagger `total` markers' entrance start times (in `order` sequence) across the first
- * `revealSpanFrac` fraction of the clip, each fading in over `fadeInSec`.
+ * Lays markers out strictly one after another: each starts `holdSec` after the previous one
+ * finishes revealing, so it sits alone on screen that long. `fadeInSecs` is per marker in
+ * reveal order; `endSec` is when the last hold elapses — the clip length isn't capped.
  */
-export function computeMarkerTimings(
-  total: number,
-  durationSec: number,
-  revealSpanFrac = 0.6,
-  fadeInSec = 0.5,
-): MarkerTiming[] {
-  if (total <= 0) return [];
-  const span = durationSec * revealSpanFrac;
-  return Array.from({ length: total }, (_, i) => ({
-    startSec: total <= 1 ? 0 : (i / total) * span,
-    fadeInSec,
-  }));
+export function computeSequentialTimings(
+  fadeInSecs: readonly number[],
+  holdSec: number,
+  leadInSec = 0,
+): { timings: MarkerTiming[]; endSec: number } {
+  let cursor = leadInSec;
+  const timings = fadeInSecs.map(fadeInSec => {
+    const timing = { startSec: cursor, fadeInSec };
+    cursor += fadeInSec + holdSec;
+    return timing;
+  });
+  return { timings, endSec: cursor };
 }
 
 /** Resolve a marker's reveal state at `elapsedSec` into the clip. */
@@ -85,6 +86,47 @@ export function kenBurnsRect(
   const tx   = target.x * srcW;
   const ty   = target.y * srcH;
 
+  const sx = Math.max(0, Math.min(srcW - sw, tx - sw / 2));
+  const sy = Math.max(0, Math.min(srcH - sh, ty - sh / 2));
+  return { sx, sy, sw, sh };
+}
+
+/** One stop along a multi-point "story" camera path — see `kenBurnsPath`. */
+export interface CameraKeyframe { atSec: number; target: NormPoint | null; zoom: number }
+
+/**
+ * Alternative to `kenBurnsRect` for a camera that visits several points in turn (an opening
+ * wide shot, then each marker as it's revealed) instead of one continuous zoom toward a
+ * single target. Eases between whichever two keyframes straddle `elapsedSec` — same
+ * smoothstep curve as `kenBurnsRect` — so consecutive stops read as smooth pans, not hard
+ * cuts. A `null` target means "full-frame centre" (the opening wide shot). Holds at the
+ * first/last keyframe's state outside the keyframe list's own time range.
+ */
+export function kenBurnsPath(
+  elapsedSec: number,
+  srcW: number,
+  srcH: number,
+  keyframes: CameraKeyframe[],
+): KenBurnsRect {
+  if (keyframes.length === 0) return { sx: 0, sy: 0, sw: srcW, sh: srcH };
+
+  let i = 0;
+  while (i < keyframes.length - 1 && keyframes[i + 1]!.atSec <= elapsedSec) i++;
+  const prev = keyframes[i]!;
+  const next = keyframes[Math.min(i + 1, keyframes.length - 1)]!;
+  const span = next.atSec - prev.atSec;
+  const localT = span > 0 ? Math.max(0, Math.min(1, (elapsedSec - prev.atSec) / span)) : 1;
+  const ease = localT * localT * (3 - 2 * localT); // smoothstep, same curve as kenBurnsRect
+
+  const lerp  = (a: number, b: number) => a + (b - a) * ease;
+  const zoom  = lerp(prev.zoom, next.zoom);
+  const prevC = prev.target ?? { x: 0.5, y: 0.5 };
+  const nextC = next.target ?? { x: 0.5, y: 0.5 };
+  const tx    = lerp(prevC.x, nextC.x) * srcW;
+  const ty    = lerp(prevC.y, nextC.y) * srcH;
+
+  const sw = srcW / zoom;
+  const sh = srcH / zoom;
   const sx = Math.max(0, Math.min(srcW - sw, tx - sw / 2));
   const sy = Math.max(0, Math.min(srcH - sh, ty - sh / 2));
   return { sx, sy, sw, sh };

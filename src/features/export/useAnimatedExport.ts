@@ -2,13 +2,18 @@ import { useCallback, useState } from 'react';
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import qrcode from 'qrcode-generator';
 import type { AppState } from '../../hooks/useScene';
-import type { MarkerType, UnitMarker } from '../../types/index';
+import type { Marker, NormPoint, UnitMarker } from '../../types/index';
+import { getMarkerPoints } from '../../types/markerPoints';
 import { getPreset } from '../../design/presets';
 import { renderScene } from '../../render-core/index';
-import { computeMarkerTimings, markerReveal, easeOutCubic, kenBurnsRect, FULL_REVEAL } from '../../render-core/animation';
+import {
+  markerReveal, easeOutCubic, kenBurnsRect, kenBurnsPath, FULL_REVEAL,
+  type MarkerTiming, type CameraKeyframe,
+} from '../../render-core/animation';
 import { FONT_STACK } from '../../design/tokens';
 import { waitForFonts } from '../../lib/fonts';
 import { downloadBlob } from '../../lib/download';
+import { planClip, ENDING_IN_SEC } from './clipPlan';
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -26,11 +31,14 @@ const VIDEO_FPS           = 20;
 // needs a much smaller res+fps to stay a reasonably shareable size.
 const GIF_MAX_LONG_EDGE   = 640;
 const GIF_FPS             = 10;
-// Default per-marker fade-in is 0.5s (see computeMarkerTimings) — ZONE's outline-trace +
-// fill looked "a bit too fast" at that pace, so it gets a slower reveal specifically.
-const FADE_IN_SEC_BY_TYPE: Partial<Record<MarkerType, number>> = { ZONE: 1.3 };
 const ZOOM          = 1.06; // "zoom nhẹ Ken Burns 1.0→1.06" — slight, not dramatic
-const ENDING_FRAC   = 0.18; // last portion of the clip reserved for the QR/hotline outro card
+
+// "Story" camera mode (alternative to the single continuous zoom above): tours markers in
+// reveal order instead of zooming toward just one. Its own, stronger max zoom is fine since
+// the camera is already moving between stops, unlike the single-point mode's held-still zoom.
+export type CameraMode = 'single' | 'story';
+const STORY_MAX_STOPS = 5;
+const STORY_ZOOM_MAX  = 1.25;
 
 function getSupportedVideoFormat(): { mimeType: string; extension: 'mp4' | 'webm' } | null {
   if (typeof window === 'undefined' || typeof window.MediaRecorder === 'undefined') return null;
@@ -81,8 +89,8 @@ function buildQrCanvas(hotline: string): HTMLCanvasElement {
 /** Pre-renders the ending card's WHOLE static visual (white rounded-rect + drop shadow + QR
  *  + hotline text) once into a bitmap. `ctx.shadowBlur` on a large filled shape is one of the
  *  most expensive Canvas2D operations — redoing it from scratch on every single frame of the
- *  ~ENDING_FRAC tail (still ~30 frames for an 8s/20fps video) was the real cause of the
- *  visible stutter reported right at the end of exports. Rendered once here instead; per-frame
+ *  ending outro was the real cause of the visible stutter reported right at the end of
+ *  exports. Rendered once here instead; per-frame
  *  cost drops to a single cheap `drawImage`. `margin` leaves room so the shadow isn't clipped
  *  at the bitmap's edge. */
 function buildEndingCard(
@@ -132,15 +140,16 @@ function buildEndingCard(
   return bitmap;
 }
 
-/** Outro: pops the pre-rendered card bitmap (see `buildEndingCard`) in over the last
- *  ENDING_FRAC of the clip, on a subtly dimmed backdrop so it reads over any photo. */
+/** Outro: pops the pre-rendered card bitmap (see `buildEndingCard`) in over ENDING_IN_SEC,
+ *  on a subtly dimmed backdrop so it reads over any photo. `sinceStartSec` is negative until
+ *  the outro begins. */
 function drawEndingCard(
   ctx: CanvasRenderingContext2D,
-  w: number, h: number, t: number,
+  w: number, h: number, sinceStartSec: number,
   card: HTMLCanvasElement | null,
 ): void {
   if (!card) return;
-  const endP = Math.max(0, Math.min(1, (t - (1 - ENDING_FRAC)) / ENDING_FRAC));
+  const endP = Math.max(0, Math.min(1, sinceStartSec / ENDING_IN_SEC));
   if (endP <= 0) return;
   const ease = easeOutCubic(endP);
 
@@ -159,11 +168,46 @@ function drawEndingCard(
   ctx.restore();
 }
 
+/** A marker's single "look-at" point for the story camera — the centroid of all its
+ *  editable points. Already correct for every type with no per-type branching: UNIT/POI/
+ *  TEXT have exactly one point, ARROW's from+to average to its midpoint, ROUTE/ZONE average
+ *  to roughly the middle of their path. */
+function markerFocusPoint(marker: Marker): NormPoint {
+  const points = getMarkerPoints(marker);
+  const x = points.reduce((sum, p) => sum + p.pos.x, 0) / points.length;
+  const y = points.reduce((sum, p) => sum + p.pos.y, 0) / points.length;
+  return { x, y };
+}
+
+/** Builds the story camera's stops: an opening wide shot, then up to STORY_MAX_STOPS markers
+ *  (evenly subsampled by index if there are more, which always keeps the last one — `sorted`'s
+ *  own last element, the primary unit per the "UNIT always last" resort below), each arrived
+ *  at right as it finishes revealing so the camera move and the reveal read as one motion.
+ *  Zoom ramps from 1x (wide shot) to STORY_ZOOM_MAX at the final stop. */
+function buildCameraKeyframes(sorted: Marker[], timings: MarkerTiming[]): CameraKeyframe[] {
+  const n = sorted.length;
+  if (n === 0) return [{ atSec: 0, target: null, zoom: 1 }];
+
+  const stopCount = Math.min(n, STORY_MAX_STOPS);
+  const keyframes: CameraKeyframe[] = [{ atSec: 0, target: null, zoom: 1 }];
+  for (let stopI = 0; stopI < stopCount; stopI++) {
+    const idx    = stopCount === 1 ? n - 1 : Math.round((stopI * (n - 1)) / (stopCount - 1));
+    const timing = timings[idx]!;
+    const zoomP  = stopCount === 1 ? 1 : stopI / (stopCount - 1);
+    keyframes.push({
+      atSec:  timing.startSec + timing.fadeInSec,
+      target: markerFocusPoint(sorted[idx]!),
+      zoom:   1 + (STORY_ZOOM_MAX - 1) * zoomP,
+    });
+  }
+  return keyframes;
+}
+
 export function useAnimatedExport(state: AppState) {
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress]   = useState(0);
 
-  const prepare = useCallback(async (durationSec: number, maxLongEdge: number) => {
+  const prepare = useCallback(async (holdSec: number, maxLongEdge: number, cameraMode: CameraMode = 'single') => {
     if (!state.image) return null;
     await waitForFonts();
 
@@ -176,20 +220,12 @@ export function useAnimatedExport(state: AppState) {
     const srcCtx = src.getContext('2d');
     if (!srcCtx) return null;
 
-    // Non-UNIT markers reveal in their own order first; UNIT ("căn hộ") always last, as
-    // the closing "hero" reveal, regardless of where it sits in the marker list.
-    const sorted = [...state.markers].sort((a, b) => {
-      const aUnit = a.type === 'UNIT' ? 1 : 0;
-      const bUnit = b.type === 'UNIT' ? 1 : 0;
-      return aUnit !== bUnit ? aUnit - bUnit : a.order - b.order;
-    });
+    const hasHotline = state.brand.hotline.trim().length > 0;
+    const { sorted, timings, endingStartSec, durationSec } = planClip(state.markers, holdSec, hasHotline);
     const firstUnit = sorted.find((m): m is UnitMarker => m.type === 'UNIT') ?? null;
     const target    = firstUnit?.point ?? null;
-    const timings   = computeMarkerTimings(sorted.length, durationSec).map((timing, i) => ({
-      ...timing,
-      fadeInSec: FADE_IN_SEC_BY_TYPE[sorted[i]!.type] ?? timing.fadeInSec,
-    }));
-    const qrCanvas   = state.brand.hotline.trim() ? buildQrCanvas(state.brand.hotline) : null;
+    const cameraKeyframes = cameraMode === 'story' ? buildCameraKeyframes(sorted, timings) : null;
+    const qrCanvas   = hasHotline ? buildQrCanvas(state.brand.hotline) : null;
     const endingCard = buildEndingCard(w, h, qrCanvas, state.brand.hotline, preset.accent);
 
     function renderFrame(outCtx: CanvasRenderingContext2D, t: number) {
@@ -202,22 +238,24 @@ export function useAnimatedExport(state: AppState) {
         srcCtx!, img, sorted, { w, h }, preset,
         state.brand, state.disclaimer, state.displayMode, state.spotlightMode, state.spotlightSettings, state.compass, revealOf,
       );
-      const { sx, sy, sw, sh } = kenBurnsRect(t, w, h, target, ZOOM);
+      const { sx, sy, sw, sh } = cameraKeyframes
+        ? kenBurnsPath(elapsedSec, w, h, cameraKeyframes)
+        : kenBurnsRect(t, w, h, target, ZOOM);
       outCtx.clearRect(0, 0, w, h);
       outCtx.drawImage(src, sx, sy, sw, sh, 0, 0, w, h);
-      drawEndingCard(outCtx, w, h, t, endingCard);
+      drawEndingCard(outCtx, w, h, elapsedSec - endingStartSec, endingCard);
     }
 
-    return { w, h, renderFrame };
+    return { w, h, durationSec, renderFrame };
   }, [state]);
 
-  const exportGif = useCallback(async (durationSec: number) => {
+  const exportGif = useCallback(async (holdSec: number, cameraMode: CameraMode = 'single') => {
     setExporting(true);
     setProgress(0);
     try {
-      const ready = await prepare(durationSec, GIF_MAX_LONG_EDGE);
+      const ready = await prepare(holdSec, GIF_MAX_LONG_EDGE, cameraMode);
       if (!ready) return;
-      const { w, h, renderFrame } = ready;
+      const { w, h, durationSec, renderFrame } = ready;
 
       const out    = document.createElement('canvas');
       out.width = w; out.height = h;
@@ -244,13 +282,13 @@ export function useAnimatedExport(state: AppState) {
     }
   }, [prepare]);
 
-  const exportVideo = useCallback(async (durationSec: number) => {
+  const exportVideo = useCallback(async (holdSec: number, cameraMode: CameraMode = 'single') => {
     setExporting(true);
     setProgress(0);
     try {
-      const ready = await prepare(durationSec, VIDEO_MAX_LONG_EDGE);
+      const ready = await prepare(holdSec, VIDEO_MAX_LONG_EDGE, cameraMode);
       if (!ready) return;
-      const { w, h, renderFrame } = ready;
+      const { w, h, durationSec, renderFrame } = ready;
 
       const out    = document.createElement('canvas');
       out.width = w; out.height = h;
@@ -283,7 +321,7 @@ export function useAnimatedExport(state: AppState) {
       const startedAt = performance.now();
       const frameIntervalMs = 1000 / VIDEO_FPS;
       // setTimeout, not requestAnimationFrame — rAF fully STOPS firing once the tab loses
-      // focus/visibility (an 8–10s export is long enough that a user easily alt-tabs away
+      // focus/visibility (a recording this long is enough for a user to easily alt-tab away
       // while waiting), which silently hung the whole export forever. setTimeout keeps
       // running (browsers only clamp its rate in background tabs, never fully suspend it),
       // so the export reliably finishes even if the page isn't in the foreground the whole

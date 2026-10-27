@@ -15,9 +15,9 @@ function getScratchCanvas(w: number, h: number): OffscreenCanvas {
 /** Dim overlay with soft radial spotlight cutouts for each unit marker.
  *  `settings` (default: matches the classic look) controls how dark the surroundings get,
  *  how soft the edge feather is, and how fully lit the centre is — "sale muốn vùng sáng vào
- *  đúng căn, tối phần còn lại". `revealOf` (default: always fully revealed) fades each
- *  marker's own cutout+ring in, plus a brief bright ripple right as it lands ("loé sáng") —
- *  used by the animated (video/GIF) export for a one-by-one reveal. */
+ *  đúng căn, tối phần còn lại". `revealOf` (default: always fully revealed) fades the dim in
+ *  with the first unit, then each marker's own cutout+ring, plus a brief bright ripple right
+ *  as it lands ("loé sáng") — used by the animated (video/GIF) export for a one-by-one reveal. */
 export function drawEffect(
   ctx: CanvasRenderingContext2D,
   frame: Size,
@@ -27,6 +27,10 @@ export function drawEffect(
   revealOf: (id: string) => MarkerReveal = () => FULL_REVEAL,
 ): void {
   if (unitMarkers.length === 0) return;
+
+  // The dim arrives with the first unit's reveal rather than sitting over the photo from frame one.
+  const dimP = Math.max(...unitMarkers.map(m => revealOf(m.id).p));
+  if (dimP <= 0) return;
 
   const dimAlpha = settings.dimAlpha ?? preset.dimAlpha;
   const { accent } = preset;
@@ -43,6 +47,7 @@ export function drawEffect(
     oc2d.globalCompositeOperation = 'source-over';
     oc2d.globalAlpha = 1;
     oc2d.clearRect(0, 0, frame.w, frame.h);
+    oc2d.globalAlpha = dimP;
     oc2d.fillStyle = `rgba(0,0,0,${dimAlpha})`;
     oc2d.fillRect(0, 0, frame.w, frame.h);
 
@@ -56,7 +61,8 @@ export function drawEffect(
       grad.addColorStop(1 / outerMult, `rgba(0,0,0,${eraseAlpha})`);
       grad.addColorStop(1, 'rgba(0,0,0,0)');
       oc2d.fillStyle = grad;
-      oc2d.globalAlpha = revealOf(m.id).p;
+      // Relative to the dim, so the leading unit is already fully lit while the dim fades in around it.
+      oc2d.globalAlpha = revealOf(m.id).p / dimP;
       oc2d.beginPath();
       oc2d.arc(x, y, r * outerMult, 0, Math.PI * 2);
       oc2d.fill();
@@ -65,6 +71,7 @@ export function drawEffect(
   } else {
     // Fallback: sharp cutout with even-odd rule
     ctx.save();
+    ctx.globalAlpha *= dimP;
     ctx.fillStyle = `rgba(0,0,0,${dimAlpha})`;
     ctx.beginPath();
     ctx.rect(0, 0, frame.w, frame.h);

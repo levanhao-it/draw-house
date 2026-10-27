@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { AppState, SceneAction } from '../../hooks/useScene';
 import { useExport } from './useExport';
 import { useAnimatedExport } from './useAnimatedExport';
+import { planClip } from './clipPlan';
 import { vi } from '../../i18n/vi';
 
 interface Props {
@@ -13,7 +14,9 @@ export default function ExportPanel({ state, dispatch }: Props) {
   const { exportPng, exporting, needsHotline, setNeedsHotline } = useExport(state);
   const { exportGif, exportVideo, exporting: exportingAnim, progress } = useAnimatedExport(state);
   const [hotlineInput, setHotlineInput] = useState('');
-  const [duration, setDuration] = useState(8);
+  const [holdSec, setHoldSec] = useState(1);
+  const [cameraMode, setCameraMode] = useState<'single' | 'story'>('single');
+  const clipSec = planClip(state.markers, holdSec, state.brand.hotline.trim().length > 0).durationSec;
 
   function saveHotline() {
     const val = hotlineInput.trim();
@@ -44,7 +47,7 @@ export default function ExportPanel({ state, dispatch }: Props) {
             type="button"
             onClick={saveHotline}
             disabled={!hotlineInput.trim()}
-            className="self-start px-3 py-1 bg-yellow-400 text-black rounded text-xs font-semibold disabled:opacity-40"
+            className="self-start min-h-[36px] px-4 py-2 bg-yellow-400 text-black rounded-lg text-xs font-semibold disabled:opacity-40 touch-manipulation"
           >
             Lưu &amp; tiếp tục
           </button>
@@ -67,7 +70,7 @@ export default function ExportPanel({ state, dispatch }: Props) {
           <button
             type="button"
             onClick={() => setNeedsHotline(true)}
-            className="text-neutral-600 hover:text-yellow-400"
+            className="w-8 h-8 flex items-center justify-center shrink-0 text-neutral-600 hover:text-yellow-400 touch-manipulation"
           >✒️</button>
         </div>
       )}
@@ -98,32 +101,53 @@ export default function ExportPanel({ state, dispatch }: Props) {
       <div className="flex flex-col gap-2 pt-2 border-t border-neutral-800">
         <h3 className="text-sm font-semibold text-neutral-300">{vi.video.title}</h3>
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-neutral-400">{vi.video.duration} — {duration}s</label>
+          <label className="text-xs text-neutral-400">{vi.video.holdPerElement} — {holdSec}s</label>
           <input
             type="range"
-            min={6}
-            max={10}
-            step={1}
-            value={duration}
+            min={1}
+            max={8}
+            step={0.5}
+            value={holdSec}
             disabled={exportingAnim}
-            onChange={e => setDuration(parseInt(e.target.value, 10))}
+            onChange={e => setHoldSec(parseFloat(e.target.value))}
             className="w-full accent-yellow-400"
           />
+          <p className="text-xs text-neutral-500">{vi.video.totalDuration} ≈ {Math.round(clipSec)}s</p>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-neutral-400">{vi.video.cameraMode}</label>
+          <div className="flex gap-1">
+            {([['single', vi.video.cameraSingle], ['story', vi.video.cameraStory]] as const).map(([m, label]) => (
+              <button
+                key={m}
+                type="button"
+                disabled={exportingAnim}
+                onClick={() => setCameraMode(m)}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  cameraMode === m
+                    ? 'bg-yellow-400 text-black'
+                    : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex gap-2">
           <button
             type="button"
             disabled={exportingAnim || !state.image}
-            onClick={() => void exportGif(duration)}
-            className="flex-1 min-h-[40px] bg-neutral-800 text-white font-medium rounded-xl hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm"
+            onClick={() => void exportGif(holdSec, cameraMode)}
+            className="flex-1 min-h-[44px] bg-neutral-800 text-white font-medium rounded-xl hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm"
           >
             {vi.video.exportGif}
           </button>
           <button
             type="button"
             disabled={exportingAnim || !state.image}
-            onClick={() => void exportVideo(duration)}
-            className="flex-1 min-h-[40px] bg-neutral-800 text-white font-medium rounded-xl hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm"
+            onClick={() => void exportVideo(holdSec, cameraMode)}
+            className="flex-1 min-h-[44px] bg-neutral-800 text-white font-medium rounded-xl hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm"
           >
             {vi.video.exportVideo}
           </button>

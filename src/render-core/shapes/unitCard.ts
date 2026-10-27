@@ -33,6 +33,7 @@ export function drawUnitCard(
   const pad = SPACE.sm * scale;
   const r   = preset.cardRadius * scale;
   const { fields, truncated } = truncateFields(marker.data);
+  if (reveal.p <= 0) return truncated;
 
   const ease = easeOutCubic(reveal.p);
   const priceHighlight = landedPulse(reveal.sinceLandedSec, 0.2, 0.35);
@@ -56,7 +57,7 @@ export function drawUnitCard(
   ctx.shadowColor = 'transparent';
 
   // ── edge decoration ───────────────────────────────────────
-  const barW = drawEdge(ctx, preset, x, y, w, h, r, scale);
+  const barW = drawEdge(ctx, preset, x, y, w, h, r, scale, ease);
 
   // ── text area origin ──────────────────────────────────────
   const tX = x + barW + pad;
@@ -76,7 +77,7 @@ export function drawUnitCard(
   // thin accent separator
   ctx.save();
   ctx.strokeStyle = preset.accent;
-  ctx.globalAlpha = 0.22;
+  ctx.globalAlpha = 0.22 * ease;
   ctx.lineWidth   = scale;
   ctx.beginPath();
   ctx.moveTo(tX, tY);
@@ -101,12 +102,12 @@ export function drawUnitCard(
       const leftKey  = t2Order[i]!;
       const rightKey = t2Order[i + 1];
       const cy = iconCy(tY);
-      drawFieldIcon(ctx, leftKey, tX + chipD / 2, cy, iconSz, preset.textSecondary);
+      drawFieldIcon(ctx, leftKey, tX + chipD / 2, cy, iconSz, preset.textSecondary, ease);
       let rowLines: number;
       if (rightKey !== undefined) {
         const rightX = tX + colW + pad * 0.5;
         const leftLines = drawWrappedField(ctx, fields[leftKey] ?? '', tX + iconInset, tY, colW - iconInset, lineH);
-        drawFieldIcon(ctx, rightKey, rightX + chipD / 2, cy, iconSz, preset.textSecondary);
+        drawFieldIcon(ctx, rightKey, rightX + chipD / 2, cy, iconSz, preset.textSecondary, ease);
         const rightLines = drawWrappedField(ctx, fields[rightKey] ?? '', rightX + iconInset, tY, colW - iconInset, lineH);
         rowLines = Math.max(leftLines, rightLines);
       } else {
@@ -180,7 +181,7 @@ export function drawUnitCard(
         ctx.fillText('·', curX, 0);
         curX += dotW + iconGap;
       }
-      drawFieldIcon(ctx, part.key, curX + chipD / 2, 0, iconSz, t3Color);
+      drawFieldIcon(ctx, part.key, curX + chipD / 2, 0, iconSz, t3Color, ease);
       curX += chipD + iconGap * 0.6;
       ctx.fillText(part.text, curX, 0);
       curX += ctx.measureText(part.text).width + iconGap;
@@ -319,7 +320,7 @@ function forceEllipsis(ctx: CanvasRenderingContext2D, text: string, maxWidth: nu
 function drawEdge(
   ctx: CanvasRenderingContext2D,
   preset: Preset,
-  x: number, y: number, w: number, h: number, r: number, scale: number,
+  x: number, y: number, w: number, h: number, r: number, scale: number, alpha: number,
 ): number {
   if (preset.cardEdge === 'accentBar') {
     const bw = 8 * scale;
@@ -342,7 +343,7 @@ function drawEdge(
   } else if (preset.cardEdge === 'softShadow') {
     // Hairline so the card reads as a distinct shape against busy photo backgrounds
     ctx.save();
-    ctx.globalAlpha = 0.08;
+    ctx.globalAlpha = 0.08 * alpha;
     ctx.strokeStyle = preset.textPrimary;
     ctx.lineWidth   = scale;
     roundRect(ctx, x, y, w, h, r);
@@ -360,21 +361,22 @@ function isLightHex(hex: string): boolean {
   return 0.299 * r + 0.587 * g + 0.114 * b > 128;
 }
 
+// `alpha` is the card's reveal alpha — literal alphas here would override its fade-in.
 function drawFieldIcon(
   ctx: CanvasRenderingContext2D,
   key: FieldIconKey,
-  cx: number, cy: number, size: number, color: string,
+  cx: number, cy: number, size: number, color: string, alpha: number,
 ): void {
   const def   = FIELD_ICONS[key];
   const chipR = (size * FIELD_ICON_CHIP_MULT) / 2;
 
   ctx.save();
   ctx.fillStyle   = color;
-  ctx.globalAlpha = 0.15;
+  ctx.globalAlpha = 0.15 * alpha;
   ctx.beginPath();
   ctx.arc(cx, cy, chipR, 0, Math.PI * 2);
   ctx.fill();
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = alpha;
 
   ctx.translate(cx - size / 2, cy - size / 2);
   ctx.scale(size / 24, size / 24);

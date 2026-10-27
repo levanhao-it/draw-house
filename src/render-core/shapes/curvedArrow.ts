@@ -1,4 +1,4 @@
-import { bezierPoints, pathLength, type Vec2 } from '../geom';
+import { bezierPoints, pathLength, pathPrefix, type Vec2 } from '../geom';
 import { ARROW_OUTLINE, ELEVATION } from '../../design/tokens';
 import { FULL_REVEAL, type MarkerReveal } from '../animation';
 import type { Preset } from '../../design/presets';
@@ -18,6 +18,8 @@ export interface ArrowOpts {
 export function drawCurvedArrow(ctx: CanvasRenderingContext2D, opts: ArrowOpts): void {
   const { from, ctrl, to, preset, scale, reveal = FULL_REVEAL } = opts;
   const { p } = reveal;
+  // A zero-length stroke with a round cap still paints a dot, so draw nothing until the line starts.
+  if (p <= 0) return;
   const pts     = bezierPoints(from, ctrl, to, 24);
   const strokeW = preset.arrowWidth * scale;
   const outlineW = ARROW_OUTLINE.strokeWidth * scale;
@@ -38,14 +40,9 @@ export function drawCurvedArrow(ctx: CanvasRenderingContext2D, opts: ArrowOpts):
   const linePts = pts.filter(p2 => Math.hypot(p2.x - to.x, p2.y - to.y) > headLen);
   linePts.push(lineEnd);
 
-  // While revealing, a single growing dash (then a gap covering the rest) draws the line
-  // progressively along its length, overriding any artistic dash style until it lands.
-  const revealTotal = p < 1 ? pathLength(linePts) : 0;
-  function applyLineDash() {
-    if (p < 1) { ctx.setLineDash([revealTotal * p, revealTotal]); ctx.lineDashOffset = 0; }
-    else if (isDashed) { ctx.setLineDash(dash); }
-    else { ctx.setLineDash([]); }
-  }
+  // While revealing, only the first `p` of the line's length is drawn, growing from the tail;
+  // cutting the path (rather than dashing it) keeps a dashed style dashed all the way.
+  const drawn = p < 1 ? pathPrefix(linePts, pathLength(linePts) * p) : linePts;
 
   // ---- outline pass (wider, drawn first) ----
   ctx.save();
@@ -56,8 +53,8 @@ export function drawCurvedArrow(ctx: CanvasRenderingContext2D, opts: ArrowOpts):
   ctx.lineWidth     = strokeW + outlineW;
   ctx.lineCap       = 'round';
   ctx.lineJoin      = 'round';
-  applyLineDash();
-  drawPath(ctx, linePts);
+  ctx.setLineDash(dash);
+  drawPath(ctx, drawn);
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.restore();
@@ -68,8 +65,8 @@ export function drawCurvedArrow(ctx: CanvasRenderingContext2D, opts: ArrowOpts):
   ctx.lineWidth   = strokeW;
   ctx.lineCap     = 'round';
   ctx.lineJoin    = 'round';
-  applyLineDash();
-  drawPath(ctx, linePts);
+  ctx.setLineDash(dash);
+  drawPath(ctx, drawn);
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.restore();

@@ -80,3 +80,23 @@ export function pathLength(pts: Vec2[], closed = false): number {
   }
   return total;
 }
+
+/** The first `length` px of a polyline, cut exactly there (the whole polyline when it is shorter). */
+export function pathPrefix(pts: Vec2[], length: number): Vec2[] {
+  const first = pts[0];
+  if (!first) return [];
+  const out: Vec2[] = [first];
+  let left = length;
+  for (let i = 1; i < pts.length && left > 0; i++) {
+    const a = pts[i - 1]!, b = pts[i]!;
+    const seg = Math.hypot(b.x - a.x, b.y - a.y);
+    if (left < seg) {
+      const t = left / seg;
+      out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+      break;
+    }
+    out.push(b);
+    left -= seg;
+  }
+  return out;
+}

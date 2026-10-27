@@ -30,6 +30,7 @@ export function drawPoiPill(
     : marker.data.name;
 
   const { p } = reveal;
+  if (p <= 0) return;
   const bgAlpha  = Math.min(1, p / 0.2);
   const iconPop  = easeOutBack(Math.min(1, p / 0.45));
   const textP    = Math.max(0, Math.min(1, (p - 0.35) / 0.65));

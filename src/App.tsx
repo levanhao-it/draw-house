@@ -253,7 +253,7 @@ function App() {
               <ArrowForm marker={selected as ArrowMarker} dispatch={dispatch} />
             )}
             {selected?.type === 'TEXT' && (
-              <TextForm marker={selected as TextMarker} dispatch={dispatch} />
+              <TextForm marker={selected as TextMarker} dispatch={dispatch} preset={getPreset(state.preset)} />
             )}
             {!selected && (
               <div className="p-4 text-xs text-neutral-500">

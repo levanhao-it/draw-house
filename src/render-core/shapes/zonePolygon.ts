@@ -22,6 +22,7 @@ export function drawZonePolygon(
   const fill    = marker.data.fill    ?? preset.accent;
   const opacity = marker.data.opacity ?? 0.25;
   const { p } = reveal;
+  if (p <= 0) return;
   // Outline traces during the first 55% of this marker's own reveal; fill fades in
   // starting a bit before the outline finishes, so the two blend instead of stepping.
   const outlineP = Math.min(1, p / 0.55);

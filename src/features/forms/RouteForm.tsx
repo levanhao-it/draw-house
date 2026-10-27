@@ -1,6 +1,7 @@
 import type { RouteMarker } from '../../types/index';
 import { MAX_FIELD_LEN } from '../../types/index';
 import type { SceneAction } from '../../hooks/useScene';
+import LabelStyleFields from './LabelStyleFields';
 import { vi } from '../../i18n/vi';
 
 interface Props {
@@ -29,6 +30,8 @@ export default function RouteForm({ marker, dispatch }: Props) {
           className="bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-yellow-400"
         />
       </div>
+
+      <LabelStyleFields style={marker.data} update={update} />
 
       {/* Style */}
       <div className="flex flex-col gap-1">
