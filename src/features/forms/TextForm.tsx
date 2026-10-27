@@ -2,7 +2,7 @@ import type { TextMarker } from '../../types/index';
 import { MAX_FIELD_LEN } from '../../types/index';
 import type { SceneAction } from '../../hooks/useScene';
 import type { Preset } from '../../design/presets';
-import LabelStyleFields from './LabelStyleFields';
+import LabelStyleFields from './LabelStyleField';
 import { vi } from '../../i18n/vi';
 
 interface Props {
